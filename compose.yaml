@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fantasy_guru
+      POSTGRES_USER: guru
+      POSTGRES_PASSWORD: guru
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guru -d fantasy_guru"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://guru:guru@db:5432/fantasy_guru
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

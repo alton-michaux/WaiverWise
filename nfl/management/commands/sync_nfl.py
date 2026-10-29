@@ -1,0 +1,51 @@
+import nflreadpy
+import polars as pl
+from django.core.management.base import BaseCommand
+from django.db import transaction
+
+from league.models import League, Player
+from nfl.ids import update_crosswalk
+from nfl.models import Usage
+
+
+class Command(BaseCommand):
+    help = "Update the ESPN/Sleeper/nflverse id crosswalk and weekly usage from nflverse."
+
+    def handle(self, *args, **opts):
+        self.stdout.write(f"crosswalk: {update_crosswalk()} players matched")
+        season = League.objects.latest("season").season
+        self.stdout.write(f"usage: {self._usage(season)} player-weeks")
+
+    @transaction.atomic
+    def _usage(self, season: int) -> int:
+        stats = nflreadpy.load_player_stats(season).filter(pl.col("season_type") == "REG")
+        snaps = nflreadpy.load_snap_counts(season).select(
+            pl.col("pfr_player_id").alias("pfr_id"), "week", "offense_pct"
+        )
+        by_gsis = {p.gsis_id: p for p in Player.objects.exclude(gsis_id="")}
+        by_pfr = {p.pfr_id: p for p in Player.objects.exclude(pfr_id="")}
+        snap_pct = {
+            (by_pfr[r["pfr_id"]].pk, r["week"]): r["offense_pct"]
+            for r in snaps.iter_rows(named=True)
+            if r["pfr_id"] in by_pfr
+        }
+        saved = 0
+        for r in stats.iter_rows(named=True):
+            player = by_gsis.get(r["player_id"])
+            if not player:
+                continue
+            Usage.objects.update_or_create(
+                player=player,
+                season=season,
+                week=r["week"],
+                defaults=dict(
+                    snap_pct=snap_pct.get((player.pk, r["week"])),
+                    targets=r["targets"] or 0,
+                    target_share=r["target_share"],
+                    air_yards_share=r["air_yards_share"],
+                    carries=r["carries"] or 0,
+                    receptions=r["receptions"] or 0,
+                ),
+            )
+            saved += 1
+        return saved
