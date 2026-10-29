@@ -5,7 +5,7 @@ services:
     name: waiverwise
     runtime: docker
     plan: free
-    region: oregon            # must match your Render database's region for the internal URL to work
+    region: ohio              # must match the Render database's region (Ohio) for the internal URL to work
     branch: master            # production tracks master; dev → master PRs are releases
     healthCheckPath: /health/
     envVars:

@@ -56,7 +56,7 @@ CI (`.github/workflows/tests.yml`) runs the suite against Postgres 16 on every P
 ### 1. Web service on Render
 
 1. Render dashboard → **New → Blueprint** → pick this repo. It reads `render.yaml`.
-2. Before applying, set `region` in `render.yaml` to your database's region (the hostname in its URL shows it, e.g. `dpg-xxxx-a.oregon-postgres.render.com`). The internal database URL only works within the same region.
+2. Before applying, set `region` in `render.yaml` to your database's region (the hostname in its URL shows it, e.g. `dpg-xxxx-a.ohio-postgres.render.com`; this repo uses `ohio`). The internal database URL only works within the same region.
 3. Fill in the prompted secrets. For `DATABASE_URL`, use the database's **Internal** URL. `SECRET_KEY` is generated for you.
 4. Create an account once it's live: Render dashboard → the service → **Shell**, then `python manage.py createsuperuser`.
 
