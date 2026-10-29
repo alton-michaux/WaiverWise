@@ -2,6 +2,7 @@
 
 import nflreadpy
 
+from league.bulk import BATCH_SIZE
 from league.models import Player
 
 ESPN_TO_SLEEPER_TEAM = {"WSH": "WAS"}
@@ -29,5 +30,5 @@ def update_crosswalk() -> int:
         else:
             continue
         updated.append(p)
-    Player.objects.bulk_update(updated, ["sleeper_id", "gsis_id", "pfr_id"])
+    Player.objects.bulk_update(updated, ["sleeper_id", "gsis_id", "pfr_id"], batch_size=BATCH_SIZE)
     return len(updated)

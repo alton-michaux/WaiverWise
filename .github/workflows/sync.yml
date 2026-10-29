@@ -1,0 +1,69 @@
+# Scheduled data syncs (replaces the always-on scheduler process in production).
+# Cron is UTC; times below are mapped from Eastern Standard Time (UTC-5). Before the
+# November DST change they fire an hour later in local time, which is fine.
+name: Sync league data
+
+on:
+  schedule:
+    - cron: "0 10 * * *"        # nightly 5:00 ET: league, nfl, projections
+    - cron: "45 14,16 * * 0"    # Sun 9:45 + 11:45 ET: projections (after inactives)
+    - cron: "45 23 * * 1,4"     # Mon/Thu 18:45 ET: projections before prime time
+    - cron: "*/30 15-23 * * 0"  # Sun 10:00-18:30 ET every 30 min: league (injuries, live scores)
+    - cron: "*/30 0-4 * * 1"    # Sun 19:00-23:30 ET (Monday UTC): league
+    - cron: "*/30 0-4 * * 2,5"  # Mon/Thu 19:00-23:30 ET (Tue/Fri UTC): league
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: "Steps to run (space-separated: league nfl projections)"
+        default: "league nfl projections"
+
+# never run two syncs at once; a queued run waits rather than being dropped
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      ESPN_LEAGUE_ID: ${{ secrets.ESPN_LEAGUE_ID }}
+      ESPN_SEASON: ${{ secrets.ESPN_SEASON }}
+      ESPN_S2: ${{ secrets.ESPN_S2 }}
+      ESPN_SWID: ${{ secrets.ESPN_SWID }}
+      ESPN_MY_TEAM_ID: ${{ secrets.ESPN_MY_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      - name: Pick steps
+        id: steps
+        # inputs go through env, never interpolated into the script
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          REQUESTED: ${{ inputs.steps }}
+        run: |
+          case "$SCHEDULE" in
+            "0 10 * * *")                     steps="league nfl projections" ;;
+            "45 14,16 * * 0"|"45 23 * * 1,4") steps="projections" ;;
+            "")                               steps="$REQUESTED" ;;
+            *)                                steps="league" ;;
+          esac
+          for s in $steps; do
+            case "$s" in league|nfl|projections) ;; *) echo "unknown step: $s"; exit 1 ;; esac
+          done
+          echo "steps=$steps" >> "$GITHUB_OUTPUT"
+
+      - name: Sync
+        env:
+          STEPS: ${{ steps.steps.outputs.steps }}
+        # sync_all exits non-zero if any step fails, so GitHub emails you (e.g. expired ESPN cookies)
+        run: uv run python manage.py sync_all --only $STEPS

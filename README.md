@@ -25,7 +25,7 @@ Each page has an "Explain this" button that sends the numbers the page already c
 
 ## Syncing
 
-The `scheduler` service runs syncs on its own (times in `TIME_ZONE`, America/New_York):
+Locally, the compose `scheduler` service runs syncs on its own (times in `TIME_ZONE`, America/New_York). In production, `.github/workflows/sync.yml` runs the same schedule (see Deploying):
 
 | Job | When | Steps |
 |---|---|---|
@@ -45,42 +45,51 @@ Manual: `docker compose exec web python manage.py sync_all [--only league nfl pr
 uv run pytest
 ```
 
-## Deploying to Fly.io
+CI (`.github/workflows/tests.yml`) runs the suite against Postgres 16 on every PR and on pushes to `dev` and `master`, and fails if a model change is missing its migration. Locally, tests use SQLite unless `DATABASE_URL` is set.
 
-`fly.toml` runs two processes from one image: `web` (gunicorn, sleeps when idle) and `scheduler` (always on). Migrations run as the release command on every deploy. Install `flyctl` first: https://fly.io/docs/flyctl/install/
+## Deploying (Render + GitHub Actions, free)
 
-```sh
-fly auth login
-fly launch --no-deploy --copy-config      # adopts fly.toml; if "waiverwise" is taken, pick another
-                                          # name and update ALLOWED_HOSTS / CSRF_TRUSTED_ORIGINS in fly.toml
+- **Web app:** Render free web service (Docker), defined in `render.yaml`. Migrations run when the container starts.
+- **Syncs:** `.github/workflows/sync.yml` runs `sync_all` on a schedule (nightly full sync, every 30 min during game windows, projection refreshes before kickoffs). It replaces the always-on `scheduler` process, which is still used for local dev.
+- **Database:** Render Postgres. Only `DATABASE_URL` is read.
 
-# Postgres: only DATABASE_URL is read. For Render, copy the *External* Database URL and require SSL:
-fly secrets set DATABASE_URL='postgresql://user:pass@dpg-xxxx.<region>-postgres.render.com/dbname?sslmode=require'
-# (or Fly's own: `fly postgres create --name waiverwise-db --region ewr && fly postgres attach waiverwise-db`)
+### 1. Web service on Render
 
-fly secrets set \
-  SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')" \
-  ESPN_LEAGUE_ID=... ESPN_SEASON=2026 ESPN_MY_TEAM_ID=... \
-  ESPN_S2='...' ESPN_SWID='{...}' \
-  ANTHROPIC_API_KEY='...'
+1. Render dashboard → **New → Blueprint** → pick this repo. It reads `render.yaml`.
+2. Before applying, set `region` in `render.yaml` to your database's region (the hostname in its URL shows it, e.g. `dpg-xxxx-a.ohio-postgres.render.com`; this repo uses `ohio`). The internal database URL only works within the same region.
+3. Fill in the prompted values: `DATABASE_URL` (the database's **Internal** URL), `ANTHROPIC_API_KEY`, and `ESPN_MY_TEAM_ID`. `SECRET_KEY` is generated for you. ESPN cookies aren't needed on Render, since syncs run in GitHub Actions.
+4. Create an account once it's live: Render dashboard → the service → **Shell**, then `python manage.py createsuperuser`.
 
-fly deploy
-fly ssh console --pty -C "python manage.py createsuperuser"
-```
+The service deploys from `master`. Merging `dev` into `master` is a release.
 
-The scheduler sees an empty database on first boot and runs a full sync on its own (about a minute). Check with `fly logs -i <scheduler machine>` or just open the app.
+### 2. Scheduled syncs on GitHub Actions
+
+Repo → **Settings → Secrets and variables → Actions → New repository secret** for each of:
+
+| Secret | Value |
+|---|---|
+| `DATABASE_URL` | the database's **External** URL with `?sslmode=require` on the end |
+| `SECRET_KEY` | any random string (`python3 -c 'import secrets; print(secrets.token_urlsafe(50))'`) |
+| `ESPN_LEAGUE_ID`, `ESPN_SEASON`, `ESPN_S2`, `ESPN_SWID`, `ESPN_MY_TEAM_ID` | same values as `.env` |
+
+Then **Actions → Sync league data → Run workflow** to do the first sync by hand. After that it runs on its own. A failed sync (for example, expired ESPN cookies) fails the workflow and GitHub emails you.
+
+GitHub cron uses UTC and can run a few minutes late when GitHub is busy.
+
+### Free-tier tradeoffs
+
+- **Cold starts:** the free web service sleeps after 15 minutes without traffic, and waking takes about a minute. The installed app shows your last-seen copy of a page after 4 seconds while the server wakes.
+- **Database expiry:** Render's free Postgres expires 30 days after creation, and is deleted after a 14-day grace period. League data re-syncs in a minute, but accounts and cached explanations would be lost. Upgrade or move the database before then.
 
 ### Install on your phone
 
-Open `https://<app>.fly.dev` and sign in, then:
+Open `https://<service>.onrender.com` and sign in, then:
 
 - **iPhone (Safari):** Share → Add to Home Screen.
 - **Android (Chrome):** ⋮ menu → Install app (or Add to Home screen).
 
 It opens full-screen like a native app. Recently viewed pages stay readable offline.
 
-Keep the database close to the Fly region (`ewr`, Newark) since every page queries it. Render's free Postgres tier expires after a fixed period, so check its expiry date on Render and plan to upgrade or recreate it.
-
 ### When ESPN cookies expire
 
-A red banner appears when the league sync is rejected. Grab fresh `espn_s2` / `SWID` cookies and run `fly secrets set ESPN_S2='...' ESPN_SWID='{...}'` (this restarts the machines).
+A red banner appears in the app and the sync workflow fails. Grab fresh `espn_s2` / `SWID` cookies and update the `ESPN_S2` / `ESPN_SWID` GitHub Actions secrets. Render doesn't hold them: only the sync workflow talks to ESPN. Locally, update `.env`.

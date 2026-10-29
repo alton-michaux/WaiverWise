@@ -3,6 +3,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from analysis.scoring import score
+from league.bulk import upsert
 from league.models import League, Player
 from nfl import sleeper
 from nfl.consensus import remaining_weeks
@@ -26,21 +27,23 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def _save(self, league, week, rows, players) -> int:
-        saved = 0
-        for row in rows:
-            player = players.get(row["player_id"])
-            if not player:
-                continue
-            Projection.objects.update_or_create(
+        projections = [
+            Projection(
                 player=player,
                 season=league.season,
                 week=week,
                 source="sleeper",
-                defaults=dict(
-                    points=score(row["stats"], league.scoring, is_dst=player.position == "D/ST"),
-                    opponent=row.get("opponent") or "",
-                    stats=row["stats"],
-                ),
+                points=score(row["stats"], league.scoring, is_dst=player.position == "D/ST"),
+                opponent=row.get("opponent") or "",
+                stats=row["stats"],
             )
-            saved += 1
-        return saved
+            for row in rows
+            if (player := players.get(row["player_id"]))
+        ]
+        upsert(
+            Projection,
+            projections,
+            unique_fields=["player", "season", "week", "source"],
+            update_fields=["points", "opponent", "stats", "updated_at"],
+        )
+        return len(projections)

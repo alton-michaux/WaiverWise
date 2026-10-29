@@ -7,8 +7,8 @@ HEALTH_PATH = "/health/"
 class HealthCheckMiddleware:
     """Answer platform health checks before host validation, HTTPS redirects, and login.
 
-    Fly's checks hit the machine directly, so their Host header isn't the public hostname
-    and Django would reject them as DisallowedHost.
+    Platform checks can hit the container directly, so their Host header isn't the public
+    hostname and Django would reject them as DisallowedHost.
     """
 
     def __init__(self, get_response):
