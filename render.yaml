@@ -1,0 +1,24 @@
+# Render Blueprint for WaiverWise. Dashboard → New → Blueprint → pick this repo.
+# The database already exists, so it isn't declared here; paste its *Internal* URL as DATABASE_URL.
+# ESPN league/cookie settings aren't needed here: syncs run in GitHub Actions (.github/workflows/sync.yml).
+services:
+  - type: web
+    name: waiverwise
+    runtime: docker
+    plan: free
+    region: ohio              # must match the Render database's region (Ohio) for the internal URL to work
+    branch: master            # production tracks master; dev → master PRs are releases
+    healthCheckPath: /health/
+    envVars:
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: ESPN_MY_TEAM_ID  # which team is "yours" in the app
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: claude-haiku-5-5

@@ -21,7 +21,8 @@ def sync_problem(last_synced) -> str:
         if "ESPNAccessDenied" in latest.error:
             return (
                 "ESPN rejected the saved login cookies, so league data isn't updating. "
-                "Grab fresh espn_s2 and SWID cookies and update ESPN_S2 / ESPN_SWID."
+                "Grab fresh espn_s2 and SWID cookies and update the ESPN_S2 / ESPN_SWID secrets "
+                "(GitHub Actions in production, .env locally)."
             )
         return f"The last league sync failed ({latest.error[:120]}). Data may be out of date."
     if last_synced and timezone.now() - last_synced > STALE_AFTER:

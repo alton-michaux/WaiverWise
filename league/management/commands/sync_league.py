@@ -3,6 +3,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from league import espn_client
+from league.bulk import upsert
 from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
 
 
@@ -39,19 +40,18 @@ class Command(BaseCommand):
             ),
         )
 
-        for g in data.pro_games:
-            ProGame.objects.update_or_create(
-                season=data.season,
-                week=g.week,
-                team=g.team,
-                defaults=dict(opponent=g.opponent, kickoff=g.kickoff),
-            )
+        upsert(
+            ProGame,
+            [ProGame(season=data.season, week=g.week, team=g.team, opponent=g.opponent, kickoff=g.kickoff) for g in data.pro_games],
+            unique_fields=["season", "week", "team"],
+            update_fields=["opponent", "kickoff"],
+        )
 
-        players = {}
-        for p in data.players:
-            players[p.espn_id], _ = Player.objects.update_or_create(
-                espn_id=p.espn_id,
-                defaults=dict(
+        upsert(
+            Player,
+            [
+                Player(
+                    espn_id=p.espn_id,
                     name=p.name,
                     position=p.position,
                     pro_team=p.pro_team,
@@ -61,22 +61,36 @@ class Command(BaseCommand):
                     season_projection=p.season_projection,
                     fa_status=p.fa_status,
                     waiver_clears=p.waiver_clears,
-                ),
-            )
-            for week, w in p.weeks.items():
-                PlayerWeek.objects.update_or_create(
-                    player=players[p.espn_id], season=data.season, week=week, defaults=w
                 )
+                for p in data.players
+            ],
+            unique_fields=["espn_id"],
+            update_fields=[
+                "name", "position", "pro_team", "eligible_slots", "injury_status",
+                "percent_owned", "season_projection", "fa_status", "waiver_clears",
+            ],
+        )
+        players = dict(Player.objects.filter(espn_id__in=[p.espn_id for p in data.players]).values_list("espn_id", "pk"))
+        upsert(
+            PlayerWeek,
+            [
+                PlayerWeek(player_id=players[p.espn_id], season=data.season, week=week, **w)
+                for p in data.players
+                for week, w in p.weeks.items()
+            ],
+            unique_fields=["player", "season", "week"],
+            update_fields=["points", "projected_points", "breakdown"],
+        )
 
         # players outside this sync's pool have unknown availability
         Player.objects.exclude(espn_id__in=players.keys()).update(fa_status="", waiver_clears=None)
 
-        teams = {}
-        for t in data.teams:
-            teams[t.espn_id], _ = Team.objects.update_or_create(
-                league=league,
-                espn_id=t.espn_id,
-                defaults=dict(
+        upsert(
+            Team,
+            [
+                Team(
+                    league=league,
+                    espn_id=t.espn_id,
                     name=t.name,
                     abbrev=t.abbrev,
                     owners=t.owners,
@@ -87,28 +101,45 @@ class Command(BaseCommand):
                     points_against=t.points_against,
                     standing=t.standing,
                     waiver_rank=t.waiver_rank,
-                ),
-            )
+                )
+                for t in data.teams
+            ],
+            unique_fields=["league", "espn_id"],
+            update_fields=[
+                "name", "abbrev", "owners", "wins", "losses", "ties",
+                "points_for", "points_against", "standing", "waiver_rank",
+            ],
+        )
+        teams = dict(league.teams.values_list("espn_id", "pk"))
 
         RosterEntry.objects.filter(team__league=league).delete()
         RosterEntry.objects.bulk_create(
-            RosterEntry(team=teams[t.espn_id], player=players[pid], lineup_slot=slot)
+            RosterEntry(team_id=teams[t.espn_id], player_id=players[pid], lineup_slot=slot)
             for t in data.teams
             for pid, slot in t.roster
             if pid in players
         )
 
         scores = {(t.espn_id, week): score for t in data.teams for week, (_, score) in t.schedule.items()}
-        for t in data.teams:
-            for week, (opp_id, score) in t.schedule.items():
-                if t.espn_id > opp_id:
-                    continue  # each pairing saved once, from the lower team id
-                Matchup.objects.update_or_create(
+        upsert(
+            Matchup,
+            [
+                Matchup(
                     league=league,
                     week=week,
-                    team_a=teams[t.espn_id],
-                    defaults=dict(team_b=teams[opp_id], score_a=score, score_b=scores[(opp_id, week)]),
+                    team_a_id=teams[t.espn_id],
+                    team_b_id=teams[opp_id],
+                    score_a=score,
+                    score_b=scores[(opp_id, week)],
                 )
+                for t in data.teams
+                for week, (opp_id, score) in t.schedule.items()
+                if t.espn_id < opp_id  # each pairing saved once, from the lower team id
+            ],
+            unique_fields=["league", "week", "team_a"],
+            update_fields=["team_b", "score_a", "score_b"],
+        )
+
         PendingMove.objects.filter(league=league).delete()
         PendingMove.objects.bulk_create(
             PendingMove(league=league, espn_id=m.espn_id, kind=m.kind, team_espn_id=m.team_id, items=m.items)
