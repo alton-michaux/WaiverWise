@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Fantasy Guru{% endblock %}</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css">
+  <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
   <style>
     table td, table th { padding: .35rem .5rem; font-size: .9rem; }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -23,6 +24,7 @@
       <ul>
         <li><a href="{% url 'startsit' %}">Start/Sit</a></li>
         <li><a href="{% url 'waivers' %}">Waivers</a></li>
+        <li><a href="{% url 'trades' %}">Trades</a></li>
         <li><a href="{% url 'admin:index' %}">Admin</a></li>
       </ul>
     </nav>

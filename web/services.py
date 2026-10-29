@@ -10,8 +10,10 @@ from analysis.lineup import NON_STARTING
 from analysis.projections import Projection
 from analysis.startsit import Recommendation, RosterSpot, recommend
 from analysis.trends import Trend, UsageWeek, trend
+from analysis import trades
+from analysis.season import SeasonEvaluator
 from analysis.value import PlayerValue, vorp
-from analysis.waivers import WeeklyPlayer, evaluate, streamers
+from analysis.waivers import WeeklyPlayer, evaluate, roster_capacity, streamers
 from league.models import League, Matchup, Player, ProGame, RosterEntry, Team
 from nfl.consensus import game_started, remaining_weeks, week_kickoffs, weekly_projections
 from nfl.models import Usage
@@ -173,4 +175,69 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
         "rows": rows[:limit],
         "drop": by_id.get(report.drop_id),
         "drop_cost": report.drop_cost,
+    }
+
+
+class TradeContext:
+    """Everything trade tools need, built once per request."""
+
+    def __init__(self, league: League):
+        self.league = league
+        self.weeks = remaining_weeks(league)
+        players = list(Player.objects.all())
+        self.players = {p.pk: p for p in players}
+        self.proj = weekly_projections(league, players, self.weeks)
+        self.weekly = {
+            p.pk: WeeklyPlayer(p.pk, p.position, tuple(p.eligible_slots), {w: self.proj[(p.pk, w)] for w in self.weeks})
+            for p in players
+        }
+        entries = RosterEntry.objects.filter(team__league=league)
+        self.rosters = defaultdict(list)  # team pk -> non-IR WeeklyPlayers
+        self.ir = defaultdict(list)
+        for e in entries:
+            (self.ir if e.lineup_slot == "IR" else self.rosters)[e.team_id].append(self.weekly[e.player_id])
+        rostered = {e.player_id for e in entries}
+        free_agents = [w for pk, w in self.weekly.items() if pk not in rostered and self.players[pk].fa_status]
+        self.season = SeasonEvaluator(league.lineup_slots, self.weeks, streamers(free_agents, self.weeks))
+        self.capacity = roster_capacity(league.lineup_slots)
+
+    def ros_points(self, pid: int) -> float:
+        return round(sum(self.weekly[pid].mean(w) for w in self.weeks), 2)
+
+    def evaluate(self, team_a: Team, team_b: Team, a_gives: list[int], b_gives: list[int]) -> trades.Trade:
+        return trades.evaluate(
+            self.season,
+            self.rosters[team_a.pk],
+            self.rosters[team_b.pk],
+            [self.weekly[i] for i in a_gives],
+            [self.weekly[i] for i in b_gives],
+            self.capacity,
+        )
+
+    def find(self, team: Team, partner: Team) -> list[trades.Trade]:
+        return trades.find_trades(self.season, self.rosters[team.pk], self.rosters[partner.pk], self.capacity)
+
+
+@dataclass
+class TradeRow:
+    player: Player
+    ros_points: float
+
+
+def trade_rows(ctx: TradeContext, ids: list[int]) -> list[TradeRow]:
+    return [TradeRow(ctx.players[i], ctx.ros_points(i)) for i in ids]
+
+
+def roster_choices(ctx: TradeContext, team: Team) -> list[TradeRow]:
+    ids = sorted((w.id for w in ctx.rosters[team.pk]), key=lambda i: -ctx.ros_points(i))
+    return trade_rows(ctx, ids)
+
+
+def describe(ctx: TradeContext, trade: trades.Trade) -> dict:
+    return {
+        "trade": trade,
+        "a_gives": trade_rows(ctx, trade.a.gives),
+        "a_gets": trade_rows(ctx, trade.a.gets),
+        "a_dropped": trade_rows(ctx, trade.a.dropped),
+        "b_dropped": trade_rows(ctx, trade.b.dropped),
     }

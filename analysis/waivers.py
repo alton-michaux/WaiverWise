@@ -10,10 +10,9 @@ pick up that week anyway.
 
 from collections import defaultdict
 from dataclasses import dataclass
-from functools import cache
 
-from analysis.lineup import NON_STARTING, Candidate, optimal, starters
 from analysis.projections import Projection
+from analysis.season import SeasonEvaluator
 
 
 @dataclass(frozen=True)
@@ -82,24 +81,14 @@ def evaluate(
 
     `baseline` players (see `streamers`) are available to every lineup without a roster spot.
     """
-
-    @cache
-    def lineup_points(players: frozenset, week: int) -> float:
-        pool = players | frozenset(baseline)
-        lineup = optimal([Candidate(p.id, p.eligible_slots, p.mean(week)) for p in pool], slots)
-        by_id = {p.id: p for p in pool}
-        return sum(by_id[pid].mean(week) for pid in starters(lineup))
-
-    def ros(players: frozenset) -> float:
-        return sum(lineup_points(players, w) for w in weeks)
-
+    season = SeasonEvaluator(slots, weeks, baseline)
     base = frozenset(roster)
-    base_ros = ros(base)
-    base_next = lineup_points(base, weeks[0])
+    base_ros = season.ros(base)
+    base_next = season.week_points(base, weeks[0])
 
     drop, drop_cost = None, 0.0
     if len(roster) >= roster_capacity(slots):
-        drop, cost = min(((p, base_ros - ros(base - {p})) for p in roster), key=lambda pc: pc[1])
+        drop, cost = season.cheapest_drop(base)
         drop_cost = round(cost, 2)
     kept = base - {drop} if drop else base
 
@@ -109,8 +98,8 @@ def evaluate(
         targets.append(
             WaiverTarget(
                 id=fa.id,
-                next_week_gain=round(lineup_points(with_fa, weeks[0]) - base_next, 2),
-                ros_gain=round(ros(with_fa) - base_ros, 2),
+                next_week_gain=round(season.week_points(with_fa, weeks[0]) - base_next, 2),
+                ros_gain=round(season.ros(with_fa) - base_ros, 2),
             )
         )
     targets.sort(key=lambda t: (t.ros_gain, t.next_week_gain), reverse=True)
