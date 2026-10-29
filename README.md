@@ -56,7 +56,7 @@ fly launch --no-deploy --copy-config      # adopts fly.toml; if "waiverwise" is 
 
 # Postgres: only DATABASE_URL is read. For Render, copy the *External* Database URL and require SSL:
 fly secrets set DATABASE_URL='postgresql://user:pass@dpg-xxxx.<region>-postgres.render.com/dbname?sslmode=require'
-# (or Fly's own: `fly postgres create --name waiverwise-db --region iad && fly postgres attach waiverwise-db`)
+# (or Fly's own: `fly postgres create --name waiverwise-db --region ewr && fly postgres attach waiverwise-db`)
 
 fly secrets set \
   SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')" \
