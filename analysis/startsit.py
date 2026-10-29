@@ -26,7 +26,7 @@ class Recommendation:
     best_points: float
     current_win_prob: float | None
     best_win_prob: float | None
-    moves: list[tuple[int, int]]  # (bench -> start, start -> bench) pairs
+    moves: list[tuple[int, int]]  # (bench -> start, start -> bench) pairs, slot-compatible
 
 
 def value(proj: Projection | None, mode: str) -> float:
@@ -64,6 +64,7 @@ def recommend(
     best_starters = starters(best)
     ins = sorted(best_starters - current_starters, key=lambda pid: -value(by_id[pid].projection, mode))
     outs = sorted(current_starters - best_starters, key=lambda pid: value(by_id[pid].projection, mode))
+    moves = pair_moves([by_id[i] for i in ins], [by_id[o] for o in outs])
 
     cur_wp = best_wp = None
     if opponent:
@@ -80,5 +81,36 @@ def recommend(
         best_points=total(best),
         current_win_prob=cur_wp,
         best_win_prob=best_wp,
-        moves=list(zip(ins, outs)),
+        moves=moves,
     )
+
+
+def pair_moves(ins: list[RosterSpot], outs: list[RosterSpot]) -> list[tuple[int, int]]:
+    """Pair each incoming starter with an outgoing one whose slot he can fill.
+
+    Bipartite matching (augmenting paths), so a chain like WR-in / RB-out-of-FLEX still pairs.
+    Prefers same-position swaps by trying non-flex slots first.
+    """
+    def options(spot_in):
+        fits = [o for o in outs if o.current_slot in spot_in.eligible_slots]
+        return sorted(fits, key=lambda o: "/" in o.current_slot)
+
+    match: dict[int, int] = {}  # out id -> in id
+
+    def assign(spot_in, seen):
+        for o in options(spot_in):
+            if o.id in seen:
+                continue
+            seen.add(o.id)
+            if o.id not in match or assign(by_in[match[o.id]], seen):
+                match[o.id] = spot_in.id
+                return True
+        return False
+
+    by_in = {s.id: s for s in ins}
+    for spot_in in ins:
+        assign(spot_in, set())
+    pairs = {i: o for o, i in match.items()}
+    # anything unmatched (shouldn't happen with a valid lineup) still gets listed
+    leftover_outs = [o.id for o in outs if o.id not in match]
+    return [(s.id, pairs[s.id] if s.id in pairs else leftover_outs.pop(0)) for s in ins]

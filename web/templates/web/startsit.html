@@ -25,7 +25,7 @@
     <h4>Recommended moves</h4>
     <ul>
       {% for into, out in moves %}
-        <li><span class="move-in">Start {{ into.player.name }}</span> ({{ into.projection.mean|pts }}) over <span class="move-out">{{ out.player.name }}</span> ({% if out.projection %}{{ out.projection.mean|pts }}{% else %}bye{% endif %})</li>
+        <li><span class="move-in">Start {{ into.player.name }}</span> ({{ into.projection.mean|pts }}) over <span class="move-out">{{ out.player.name }}</span> ({% if out.projection %}{{ out.projection.mean|pts }}{% else %}bye{% endif %}) <span class="muted">at {{ out.slot }}</span></li>
       {% endfor %}
     </ul>
   {% else %}
