@@ -1,0 +1,84 @@
+:root {
+  --tabbar-height: 3.5rem;
+}
+
+table td, table th { padding: .35rem .5rem; font-size: .9rem; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.muted { color: var(--pico-muted-color); }
+.move-in { color: var(--pico-ins-color); font-weight: 600; }
+.move-out { color: var(--pico-del-color); font-weight: 600; }
+.tag { font-size: .75rem; padding: .05rem .35rem; border-radius: .25rem; background: var(--pico-muted-border-color); white-space: nowrap; }
+.stats { display: flex; gap: 2rem; flex-wrap: wrap; }
+.stats div strong { display: block; font-size: 1.5rem; }
+.explanation { border-left: 3px solid var(--pico-primary); }
+button.htmx-request::after { content: " …"; }
+.banner { padding: .75rem 1rem; border-radius: var(--pico-border-radius); background: var(--pico-del-color); color: #fff; margin-bottom: 1rem; }
+.login { max-width: 24rem; margin: 2rem auto; }
+.brand { text-decoration: none; }
+.signout { padding: .25rem .6rem; font-size: .8rem; margin: 0; white-space: nowrap; }
+
+/* Bottom tab bar: phones only */
+.tabbar { display: none; }
+
+@media (max-width: 767px) {
+  /* app-like chrome */
+  body { padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom)); }
+  header.container { padding-top: env(safe-area-inset-top); }
+  .desktop-only { display: none !important; }
+  h2 { font-size: 1.4rem; }
+  header nav li { padding-top: .5rem; padding-bottom: .5rem; }
+  .sync-age { font-size: .7rem; line-height: 1.1; display: block; }
+
+  .tabbar {
+    display: flex;
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 10;
+    height: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--pico-background-color);
+    border-top: 1px solid var(--pico-muted-border-color);
+  }
+  .tabbar a {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-size: .85rem;
+    color: var(--pico-muted-color);
+    min-height: 44px;
+  }
+  .tabbar a[aria-current="page"] { color: var(--pico-primary); font-weight: 600; }
+
+  /* tables become stacked cards; cells label themselves via data-label */
+  table.cards thead { display: none; }
+  table.cards, table.cards tbody, table.cards td { display: block; width: 100%; }
+  table.cards tr {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: .75rem;
+    padding: .5rem .75rem;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+  }
+  table.cards td {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .2rem 0;
+    border: none;
+    text-align: right;
+    background: none !important;
+  }
+  table.cards td[data-label]::before {
+    content: attr(data-label);
+    color: var(--pico-muted-color);
+    text-align: left;
+  }
+  table.cards td.card-title { display: block; order: -1; text-align: left; font-weight: 600; padding-bottom: .35rem; }
+  table.cards td.card-hide-empty:empty { display: none; }
+
+  /* trade builder: one column of comfortable checkboxes */
+  fieldset label { padding: .4rem 0; }
+}

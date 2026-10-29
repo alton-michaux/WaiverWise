@@ -1,5 +1,5 @@
 {% extends "web/base.html" %}
-{% load guru %}
+{% load waiverwise %}
 {% block title %}Waivers · Week {{ week }}{% endblock %}
 {% block content %}
 <hgroup>
@@ -28,7 +28,7 @@
 {% include "web/_explain_button.html" with kind="waivers" %}
 
 <div class="overflow-auto">
-<table class="striped">
+<table class="striped cards">
   <thead>
     <tr>
       <th>Player</th><th class="num">Own%</th><th class="num">Wk {{ week }}</th><th class="num">ROS</th><th class="num">VORP</th>
@@ -42,21 +42,21 @@
   <tbody>
     {% for r in rows %}
       <tr>
-        <td>
+        <td class="card-title">
           {{ r.player.name }} <span class="muted">{{ r.player.position }} · {{ r.player.pro_team }}</span>
           {% if r.player.injury_status and r.player.injury_status != "ACTIVE" %}<span class="tag">{{ r.player.injury_status|title }}</span>{% endif %}
           {% if r.pending %}<span class="tag">{{ r.pending }}</span>{% endif %}
           {% if r.player.fa_status == "WAIVERS" %}<span class="tag" title="Claim before waivers clear">Waivers · clears {{ r.player.waiver_clears|date:"D g:ia" }}</span>{% endif %}
         </td>
-        <td class="num">{{ r.player.percent_owned|floatformat:0 }}</td>
-        <td class="num">{% if r.week_proj %}{{ r.week_proj.mean|pts }}{% else %}<span class="muted">bye</span>{% endif %}</td>
-        <td class="num">{{ r.ros_points|pts }}</td>
-        <td class="num">{{ r.vorp|signed }}</td>
-        <td class="num {% if r.next_week_gain > 0 %}move-in{% endif %}">{{ r.next_week_gain|signed }}</td>
-        <td class="num {% if r.ros_gain > 0 %}move-in{% elif r.ros_gain < 0 %}move-out{% endif %}">{{ r.ros_gain|signed }}</td>
-        <td>{% if r.drop %}{{ r.drop.name }}{% else %}<span class="muted">open spot</span>{% endif %}</td>
-        <td class="num">{% if r.trend %}{{ r.trend.recent_opportunities|pts }} <span class="{% if r.trend.opportunity_change > 0 %}move-in{% elif r.trend.opportunity_change < 0 %}move-out{% endif %}">({{ r.trend.opportunity_change|signed }})</span>{% endif %}</td>
-        <td class="num">{% if r.trend.recent_snap_pct is not None %}{{ r.trend.recent_snap_pct|pct }}{% if r.trend.snap_pct_change is not None %} <span class="muted">({{ r.trend.snap_pct_change|pct }})</span>{% endif %}{% endif %}</td>
+        <td class="num" data-label="ESPN own%">{{ r.player.percent_owned|floatformat:0 }}</td>
+        <td class="num" data-label="Wk {{ week }} proj">{% if r.week_proj %}{{ r.week_proj.mean|pts }}{% else %}<span class="muted">bye</span>{% endif %}</td>
+        <td class="num" data-label="ROS points">{{ r.ros_points|pts }}</td>
+        <td class="num" data-label="VORP">{{ r.vorp|signed }}</td>
+        <td data-label="Wk gain" class="num {% if r.next_week_gain > 0 %}move-in{% endif %}">{{ r.next_week_gain|signed }}</td>
+        <td data-label="ROS gain" class="num {% if r.ros_gain > 0 %}move-in{% elif r.ros_gain < 0 %}move-out{% endif %}">{{ r.ros_gain|signed }}</td>
+        <td data-label="Drop">{% if r.drop %}{{ r.drop.name }}{% else %}<span class="muted">open spot</span>{% endif %}</td>
+        <td class="num card-hide-empty" data-label="Opp/g (last 3)">{% if r.trend %}{{ r.trend.recent_opportunities|pts }} <span class="{% if r.trend.opportunity_change > 0 %}move-in{% elif r.trend.opportunity_change < 0 %}move-out{% endif %}">({{ r.trend.opportunity_change|signed }})</span>{% endif %}</td>
+        <td class="num card-hide-empty" data-label="Snap% (last 3)">{% if r.trend.recent_snap_pct is not None %}{{ r.trend.recent_snap_pct|pct }}{% if r.trend.snap_pct_change is not None %} <span class="muted">({{ r.trend.snap_pct_change|pct }})</span>{% endif %}{% endif %}</td>
       </tr>
     {% empty %}
       <tr><td colspan="10">No free agents with remaining projections.</td></tr>

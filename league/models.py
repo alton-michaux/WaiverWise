@@ -134,3 +134,16 @@ class PendingMove(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["league", "espn_id"], name="uniq_pending_move")]
+
+
+class SyncRun(models.Model):
+    """Outcome of one sync step, for the stale-data / expired-cookie banner."""
+
+    step = models.CharField(max_length=20)
+    ok = models.BooleanField()
+    error = models.TextField(blank=True)
+    finished_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-finished_at", "-pk"]
+        indexes = [models.Index(fields=["step", "-finished_at"])]
