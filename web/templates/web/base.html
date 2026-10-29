@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Fantasy Guru{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css">
+  <style>
+    table td, table th { padding: .35rem .5rem; font-size: .9rem; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .muted { color: var(--pico-muted-color); }
+    .move-in { color: var(--pico-ins-color); font-weight: 600; }
+    .move-out { color: var(--pico-del-color); font-weight: 600; }
+    .tag { font-size: .75rem; padding: .05rem .35rem; border-radius: .25rem; background: var(--pico-muted-border-color); }
+    .stats { display: flex; gap: 2rem; flex-wrap: wrap; }
+    .stats div strong { display: block; font-size: 1.5rem; }
+  </style>
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul><li><strong>Fantasy Guru</strong></li></ul>
+      <ul>
+        <li><a href="{% url 'startsit' %}">Start/Sit</a></li>
+        <li><a href="{% url 'admin:index' %}">Admin</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main class="container">{% block content %}{% endblock %}</main>
+</body>
+</html>
