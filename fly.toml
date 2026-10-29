@@ -1,34 +1,44 @@
-# fly.toml app configuration file generated for waiverwise on 2026-10-29T15:59:35Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
-app = 'waiverwise'
-primary_region = 'ewr'
-console_command = '/code/manage.py shell'
-
-[build]
-
-[deploy]
-  release_command = 'python manage.py migrate --noinput'
+# Fly.io config for WaiverWise. See https://fly.io/docs/reference/configuration/
+app = "waiverwise"
+primary_region = "ewr"
+console_command = "/app/manage.py shell"
 
 [env]
-  PORT = '8000'
+  DEBUG = "false"
+  ALLOWED_HOSTS = "waiverwise.fly.dev"
+  CSRF_TRUSTED_ORIGINS = "https://waiverwise.fly.dev"
+
+[deploy]
+  # runs once per deploy, before new machines start
+  release_command = "python manage.py migrate --noinput"
+
+[processes]
+  web = "gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 4 --timeout 60"
+  scheduler = "python manage.py run_scheduler"
 
 [http_service]
-  internal_port = 8080
+  internal_port = 8000
+  processes = ["web"]
   force_https = true
-  auto_stop_machines = 'stop'
+  # personal use: let the web machine sleep when idle (a few seconds' cold start); the scheduler stays up
+  auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0
-  processes = ['app']
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health/"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
 
 [[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
-  memory_mb = 256
+  processes = ["web"]
+  size = "shared-cpu-1x"
+  memory = "512mb"
 
-[[statics]]
-  guest_path = '/code/static'
-  url_prefix = '/static/'
+[[vm]]
+  # nflverse loads are the memory peak
+  processes = ["scheduler"]
+  size = "shared-cpu-1x"
+  memory = "1gb"

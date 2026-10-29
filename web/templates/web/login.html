@@ -1,0 +1,23 @@
+{% extends "web/base.html" %}
+{% block title %}Sign in · WaiverWise<script>
+  // signed out: have the service worker forget cached league pages on this device
+  navigator.serviceWorker?.ready.then((reg) => reg.active?.postMessage("clear-pages"));
+</script>
+{% endblock %}
+{% block content %}
+<article class="login">
+  <h2>Sign in</h2>
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<p class="move-out">Wrong username or password.</p>{% endif %}
+    <label>Username <input type="text" name="username" autocomplete="username" autocapitalize="none" required autofocus></label>
+    <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit">Sign in</button>
+  </form>
+</article>
+<script>
+  // signed out: have the service worker forget cached league pages on this device
+  navigator.serviceWorker?.ready.then((reg) => reg.active?.postMessage("clear-pages"));
+</script>
+{% endblock %}

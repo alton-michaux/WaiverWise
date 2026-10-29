@@ -1,16 +1,16 @@
-{% load guru %}
+{% load waiverwise %}
 <details {% if trades %}open{% endif %}>
   <summary><strong>{{ partner.name }}</strong> <span class="muted">· {{ total }} mutually beneficial trade{{ total|pluralize }}</span></summary>
   {% if trades %}
-  <table class="striped">
+  <table class="striped cards">
     <thead><tr><th>You give</th><th>You get</th><th class="num">You</th><th class="num">Them</th><th></th></tr></thead>
     <tbody>
       {% for t in trades %}
         <tr>
-          {% include "web/_trade_side.html" with rows=t.a_gives %}
-          {% include "web/_trade_side.html" with rows=t.a_gets %}
-          <td class="num move-in">{{ t.trade.a.gain|signed }}</td>
-          <td class="num">{{ t.trade.b.gain|signed }}</td>
+          {% include "web/_trade_side.html" with rows=t.a_gives label="You give" %}
+          {% include "web/_trade_side.html" with rows=t.a_gets label="You get" %}
+          <td class="num move-in" data-label="Your gain">{{ t.trade.a.gain|signed }}</td>
+          <td class="num" data-label="Their gain">{{ t.trade.b.gain|signed }}</td>
           <td><a href="{% url 'trades' %}?team={{ team.espn_id }}&partner={{ partner.espn_id }}{% for r in t.a_gives %}&give={{ r.player.pk }}{% endfor %}{% for r in t.a_gets %}&get={{ r.player.pk }}{% endfor %}">Open</a></td>
         </tr>
       {% endfor %}

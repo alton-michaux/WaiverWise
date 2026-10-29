@@ -16,7 +16,7 @@ MAX_TOKENS = 16000
 # models that accept server-side refusal fallback; Haiku has none, so don't send it there
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 
-SYSTEM = """You are the analyst inside a personal fantasy football tool for a 10-team ESPN redraft league \
+SYSTEM = """You are the analyst inside WaiverWise, a fantasy football tool for a 10-team ESPN redraft league \
 (0.75 PPR, 5-point passing TDs). The tool has already computed every number you see; your job is to explain \
 what they mean for the user's decision, in the voice of a sharp, friendly league-mate.
 

@@ -1,15 +1,12 @@
-from django.db import connection
+from django.conf import settings
+from django.contrib.auth.decorators import login_not_required
 from django.http import Http404, JsonResponse
+from django.templatetags.static import static
+from django.views.decorators.cache import cache_control
 from django.shortcuts import get_object_or_404, redirect, render
 
 from analysis.startsit import MODES
 from web import narrate, services
-
-
-def health(request):
-    with connection.cursor() as cur:
-        cur.execute("SELECT 1")
-    return JsonResponse({"status": "ok"})
 
 
 def home(request):
@@ -137,3 +134,53 @@ def explain(request, kind):
     except narrate.NarrationError as e:
         text, error = None, str(e)
     return render(request, "web/_explanation.html", {"text": text, "error": error})
+
+
+# --- PWA ---
+
+
+@login_not_required
+def manifest(request):
+    """Fetched by browsers without cookies, so it must not require login."""
+    icon = lambda name, size, purpose="any": {  # noqa: E731
+        "src": static(f"icons/{name}"),
+        "sizes": size,
+        "type": "image/png",
+        "purpose": purpose,
+    }
+    return JsonResponse(
+        {
+            "id": "/",
+            "name": "WaiverWise",
+            "short_name": "WaiverWise",
+            "description": "Start/sit, waiver, and trade help for your fantasy football league.",
+            "start_url": "/",
+            "scope": "/",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#0172ad",
+            "icons": [
+                icon("icon-192.png", "192x192"),
+                icon("icon-512.png", "512x512"),
+                icon("icon-maskable-512.png", "512x512", "maskable"),
+            ],
+        },
+        content_type="application/manifest+json",
+    )
+
+
+@login_not_required
+@cache_control(no_cache=True)
+def service_worker(request):
+    # served from the site root so its scope covers every page
+    return render(
+        request,
+        "web/sw.js",
+        {"version": settings.APP_VERSION},
+        content_type="application/javascript",
+    )
+
+
+@login_not_required
+def offline(request):
+    return render(request, "web/offline.html")

@@ -1,4 +1,4 @@
-# fantasy_guru
+# WaiverWise
 
 Start/sit, waiver, and trade analysis for a private ESPN fantasy football league.
 
@@ -13,7 +13,7 @@ docker compose exec web python manage.py migrate
 docker compose exec web python manage.py sync_all
 ```
 
-App: http://localhost:8000 (start/sit, waivers, trades). Admin needs `createsuperuser`.
+App: http://localhost:8000 (start/sit, waivers, trades). Every page requires sign-in, so create an account first: `docker compose exec web python manage.py createsuperuser`.
 
 `ESPN_S2` / `ESPN_SWID` are cookies from fantasy.espn.com (devtools → Application → Cookies). Compose reads `.env` at container creation, so run `docker compose up -d` after editing it.
 
@@ -44,3 +44,43 @@ Manual: `docker compose exec web python manage.py sync_all [--only league nfl pr
 ```sh
 uv run pytest
 ```
+
+## Deploying to Fly.io
+
+`fly.toml` runs two processes from one image: `web` (gunicorn, sleeps when idle) and `scheduler` (always on). Migrations run as the release command on every deploy. Install `flyctl` first: https://fly.io/docs/flyctl/install/
+
+```sh
+fly auth login
+fly launch --no-deploy --copy-config      # adopts fly.toml; if "waiverwise" is taken, pick another
+                                          # name and update ALLOWED_HOSTS / CSRF_TRUSTED_ORIGINS in fly.toml
+
+# Postgres: only DATABASE_URL is read. For Render, copy the *External* Database URL and require SSL:
+fly secrets set DATABASE_URL='postgresql://user:pass@dpg-xxxx.<region>-postgres.render.com/dbname?sslmode=require'
+# (or Fly's own: `fly postgres create --name waiverwise-db --region ewr && fly postgres attach waiverwise-db`)
+
+fly secrets set \
+  SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')" \
+  ESPN_LEAGUE_ID=... ESPN_SEASON=2026 ESPN_MY_TEAM_ID=... \
+  ESPN_S2='...' ESPN_SWID='{...}' \
+  ANTHROPIC_API_KEY='...'
+
+fly deploy
+fly ssh console --pty -C "python manage.py createsuperuser"
+```
+
+The scheduler sees an empty database on first boot and runs a full sync on its own (about a minute). Check with `fly logs -i <scheduler machine>` or just open the app.
+
+### Install on your phone
+
+Open `https://<app>.fly.dev` and sign in, then:
+
+- **iPhone (Safari):** Share → Add to Home Screen.
+- **Android (Chrome):** ⋮ menu → Install app (or Add to Home screen).
+
+It opens full-screen like a native app. Recently viewed pages stay readable offline.
+
+Keep the database close to the Fly region (`ewr`, Newark) since every page queries it. Render's free Postgres tier expires after a fixed period, so check its expiry date on Render and plan to upgrade or recreate it.
+
+### When ESPN cookies expire
+
+A red banner appears when the league sync is rejected. Grab fresh `espn_s2` / `SWID` cookies and run `fly secrets set ESPN_S2='...' ESPN_SWID='{...}'` (this restarts the machines).
