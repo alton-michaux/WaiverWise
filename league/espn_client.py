@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import json
 from itertools import batched
 
 from espn_api.football import League as EspnLeague
@@ -40,6 +41,8 @@ class PlayerData:
     injury_status: str
     percent_owned: float
     season_projection: float
+    fa_status: str = ""  # "FREEAGENT" / "WAIVERS" in this league; "" if rostered
+    waiver_clears: datetime | None = None
     # week -> {"points", "projected_points", "breakdown"}
     weeks: dict[int, dict] = field(default_factory=dict)
 
@@ -75,8 +78,11 @@ def fetch_league(league_id: int, season: int, espn_s2: str | None, swid: str | N
 
     teams = [_team(t) for t in league.teams]
     rostered_ids = {pid for t in teams for pid, _ in t.roster}
-    fa_ids = {p.playerId for p in league.free_agents(size=FREE_AGENT_POOL)}
-    players = _player_cards(league, sorted(rostered_ids | fa_ids), pro_schedule)
+    fa_status = _free_agent_status(league)
+    players = _player_cards(league, sorted(rostered_ids | fa_status.keys()), pro_schedule)
+    for p in players:
+        if p.espn_id in fa_status and p.espn_id not in rostered_ids:
+            p.fa_status, p.waiver_clears = fa_status[p.espn_id]
 
     return LeagueData(
         espn_id=league_id,
@@ -152,6 +158,29 @@ def _player_cards(league: EspnLeague, ids: list[int], pro_schedule) -> list[Play
     return players
 
 
+def _free_agent_status(league: EspnLeague) -> dict[int, tuple[str, datetime | None]]:
+    """Top free agents by ownership with their status, including waiver clear time."""
+    filters = {
+        "players": {
+            "filterStatus": {"value": ["FREEAGENT", "WAIVERS"]},
+            "limit": FREE_AGENT_POOL,
+            "sortPercOwned": {"sortPriority": 1, "sortAsc": False},
+        }
+    }
+    data = league.espn_request.league_get(
+        params={"view": "kona_player_info", "scoringPeriodId": league.current_week},
+        headers={"x-fantasy-filter": json.dumps(filters)},
+    )
+    return {
+        p["id"]: (p["status"], _from_ms(p.get("waiverProcessDate")) if p["status"] == "WAIVERS" else None)
+        for p in data["players"]
+    }
+
+
+def _from_ms(ms: int | None) -> datetime | None:
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc) if ms else None
+
+
 def _lineup_slots(counts: dict[str, int]) -> dict[str, int]:
     return {POSITION_MAP[int(slot_id)]: n for slot_id, n in counts.items() if n}
 
@@ -176,7 +205,7 @@ def _pro_games(pro_schedule) -> list[ProGameData]:
                     week=int(week),
                     team=PRO_TEAM_MAP[team_id],
                     opponent=PRO_TEAM_MAP[opp_id],
-                    kickoff=datetime.fromtimestamp(game["date"] / 1000, tz=timezone.utc) if game.get("date") else None,
+                    kickoff=_from_ms(game.get("date")),
                 )
             )
     return games

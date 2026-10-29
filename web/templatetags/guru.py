@@ -11,3 +11,8 @@ def pct(value):
 @register.filter
 def pts(value):
     return "" if value is None else f"{value:.1f}"
+
+
+@register.filter
+def signed(value):
+    return "" if value is None else f"{value:+.1f}"

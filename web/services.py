@@ -1,5 +1,6 @@
 """Glue between stored league data and the pure analysis functions."""
 
+from collections import defaultdict
 from dataclasses import dataclass
 
 from django.conf import settings
@@ -8,8 +9,12 @@ from django.db.models import Q
 from analysis.lineup import NON_STARTING
 from analysis.projections import Projection
 from analysis.startsit import Recommendation, RosterSpot, recommend
-from league.models import League, Matchup, Player, ProGame, Team
-from nfl.consensus import game_started, week_kickoffs, weekly_projections
+from analysis.trends import Trend, UsageWeek, trend
+from analysis.value import PlayerValue, vorp
+from analysis.waivers import WeeklyPlayer, evaluate, streamers
+from league.models import League, Matchup, Player, ProGame, RosterEntry, Team
+from nfl.consensus import game_started, remaining_weeks, week_kickoffs, weekly_projections
+from nfl.models import Usage
 
 # display order for lineup slots
 SLOT_ORDER = ["QB", "RB", "WR", "TE", "RB/WR/TE", "OP", "D/ST", "K", "BE", "IR"]
@@ -92,4 +97,80 @@ def start_sit(team: Team, mode: str = "mean") -> dict:
         "rows": [(r, best_slot.get(r.player.pk, "BE")) for r in ordered(lambda r: r.slot)],
         "moves": [(rows[i], rows[o]) for i, o in rec.moves],
         "non_starting": NON_STARTING,
+    }
+
+
+TREND_POSITIONS = {"QB", "RB", "WR", "TE"}
+
+
+@dataclass
+class WaiverRow:
+    player: Player
+    week_proj: Projection | None
+    ros_points: float
+    vorp: float
+    next_week_gain: float
+    ros_gain: float
+    trend: Trend | None
+
+
+def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
+    league = team.league
+    weeks = remaining_weeks(league)
+    players = list(Player.objects.all())
+    proj = weekly_projections(league, players, weeks)
+
+    def weekly(p: Player) -> WeeklyPlayer:
+        return WeeklyPlayer(p.pk, p.position, tuple(p.eligible_slots), {w: proj[(p.pk, w)] for w in weeks})
+
+    def ros_points(p: Player) -> float:
+        return round(sum(x.mean for w in weeks if (x := proj[(p.pk, w)])), 2)
+
+    entries = RosterEntry.objects.filter(team__league=league).select_related("player")
+    rostered = {e.player_id for e in entries}
+    mine = [e.player for e in entries if e.team_id == team.pk and e.lineup_slot != "IR"]
+    free_agents = [p for p in players if p.fa_status and p.pk not in rostered and ros_points(p) > 0]
+
+    fa_weekly = [weekly(p) for p in free_agents]
+    report = evaluate(
+        [weekly(p) for p in mine], fa_weekly, league.lineup_slots, weeks, baseline=streamers(fa_weekly, weeks)
+    )
+    values = vorp(
+        [PlayerValue(p.pk, p.position, ros_points(p)) for p in players if p.pk in rostered or p in free_agents],
+        league.lineup_slots,
+        league.team_count,
+    )
+
+    usage = defaultdict(list)
+    for u in Usage.objects.filter(season=league.season, player__in=free_agents):
+        usage[u.player_id].append(UsageWeek(u.week, u.snap_pct, u.targets, u.carries))
+
+    by_id = {p.pk: p for p in players}
+    rows = []
+    for t in report.targets:
+        p = by_id[t.id]
+        if position and p.position != position:
+            continue
+        rows.append(
+            WaiverRow(
+                player=p,
+                week_proj=proj[(p.pk, weeks[0])],
+                ros_points=ros_points(p),
+                vorp=values.get(p.pk, 0.0),
+                next_week_gain=t.next_week_gain,
+                ros_gain=t.ros_gain,
+                trend=trend(usage[p.pk]) if p.position in TREND_POSITIONS else None,
+            )
+        )
+    # most targets gain nothing; fall back to league-wide value so the list stays useful
+    rows.sort(key=lambda r: (r.ros_gain, r.next_week_gain, r.vorp), reverse=True)
+    return {
+        "league": league,
+        "team": team,
+        "week": weeks[0],
+        "weeks": weeks,
+        "position": position,
+        "rows": rows[:limit],
+        "drop": by_id.get(report.drop_id),
+        "drop_cost": report.drop_cost,
     }

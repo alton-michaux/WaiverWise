@@ -59,12 +59,17 @@ class Command(BaseCommand):
                     injury_status=p.injury_status,
                     percent_owned=p.percent_owned,
                     season_projection=p.season_projection,
+                    fa_status=p.fa_status,
+                    waiver_clears=p.waiver_clears,
                 ),
             )
             for week, w in p.weeks.items():
                 PlayerWeek.objects.update_or_create(
                     player=players[p.espn_id], season=data.season, week=week, defaults=w
                 )
+
+        # players outside this sync's pool have unknown availability
+        Player.objects.exclude(espn_id__in=players.keys()).update(fa_status="", waiver_clears=None)
 
         teams = {}
         for t in data.teams:

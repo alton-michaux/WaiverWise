@@ -53,6 +53,8 @@ class Player(models.Model):
     injury_status = models.CharField(max_length=30, blank=True)
     percent_owned = models.FloatField(default=0)
     season_projection = models.FloatField(default=0)  # ESPN rest-of-season total (inferred)
+    fa_status = models.CharField(max_length=10, blank=True)  # FREEAGENT / WAIVERS, blank if rostered
+    waiver_clears = models.DateTimeField(null=True, blank=True)
     # crosswalk ids from nflverse ff_playerids
     sleeper_id = models.CharField(max_length=20, blank=True, db_index=True)
     gsis_id = models.CharField(max_length=20, blank=True, db_index=True)
