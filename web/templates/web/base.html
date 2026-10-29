@@ -20,7 +20,10 @@
 <body>
   <header class="container">
     <nav>
-      <ul><li><strong>Fantasy Guru</strong></li></ul>
+      <ul>
+        <li><strong>Fantasy Guru</strong></li>
+        {% if last_synced %}<li><small class="muted" title="{{ last_synced }}">synced {{ last_synced|timesince }} ago</small></li>{% endif %}
+      </ul>
       <ul>
         <li><a href="{% url 'startsit' %}">Start/Sit</a></li>
         <li><a href="{% url 'waivers' %}">Waivers</a></li>

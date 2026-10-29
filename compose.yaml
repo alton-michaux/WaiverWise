@@ -11,6 +11,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U guru -d fantasy_guru"]
       interval: 5s
       retries: 10
+    restart: unless-stopped
 
   web:
     build: .
@@ -26,6 +27,21 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    command: python manage.py run_scheduler
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://guru:guru@db:5432/fantasy_guru
+    volumes:
+      - .:/app
+      - /app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:
