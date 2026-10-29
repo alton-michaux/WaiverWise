@@ -33,6 +33,7 @@
     {% if result.a_dropped %}<p class="muted">You'd need to drop: {% for r in result.a_dropped %}{{ r.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
     {% if result.b_dropped %}<p class="muted">They'd need to drop: {% for r in result.b_dropped %}{{ r.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
   </article>
+  {% include "web/_explain_button.html" with kind="trade" %}
   {% endwith %}
 {% endif %}
 

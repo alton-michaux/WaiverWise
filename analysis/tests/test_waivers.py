@@ -67,3 +67,13 @@ def test_protected_player_is_never_the_drop():
     roster = [wp(1, "QB", 20, 20), wp(2, "RB", 10, 10), wp(3, "RB", 5, 5)]
     report = evaluate(roster, [wp(10, "RB", 12, 12)], SLOTS, WEEKS, protected={3})
     assert report.drop_id != 3
+
+
+def test_drop_is_chosen_per_free_agent():
+    slots = {"QB": 1, "K": 1, "BE": 1}
+    roster = [wp(1, "QB", 20, 20), wp(2, "K", 6, 6), wp(3, "QB", 10, 10)]  # backup QB covers nothing
+    fas = [wp(10, "K", 9, 9)]
+    report = evaluate(roster, fas, slots, WEEKS)
+    assert report.drop_id == 3  # overall most expendable
+    assert report.targets[0].drop_id == 2  # but adding a K should replace the old K
+    assert report.targets[0].ros_gain == 6
