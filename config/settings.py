@@ -15,6 +15,10 @@ if not DEBUG and SECRET_KEY == DEV_SECRET_KEY:
     raise ImproperlyConfigured("Set SECRET_KEY when DEBUG is off")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+# Render sets this to the service's public hostname (e.g. waiverwise.onrender.com)
+if RENDER_HOST := env("RENDER_EXTERNAL_HOSTNAME", default=None):
+    ALLOWED_HOSTS.append(RENDER_HOST)
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_HOST}")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -85,8 +89,8 @@ STORAGES = {
     },
 }
 
-# bump to make installed PWAs drop their cached assets (Fly sets FLY_IMAGE_REF per deploy)
-APP_VERSION = env("APP_VERSION", default=env("FLY_IMAGE_REF", default="dev"))
+# bump to make installed PWAs drop their cached assets (Render sets RENDER_GIT_COMMIT per deploy)
+APP_VERSION = env("APP_VERSION", default=env("RENDER_GIT_COMMIT", default="dev"))
 
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
@@ -96,7 +100,7 @@ SESSION_COOKIE_AGE = 60 * 60 * 24 * 90
 SESSION_SAVE_EVERY_REQUEST = True
 
 if not DEBUG:
-    # Fly terminates TLS and forwards plain HTTP with X-Forwarded-Proto
+    # the platform terminates TLS and forwards plain HTTP with X-Forwarded-Proto
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True

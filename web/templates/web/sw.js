@@ -9,6 +9,7 @@ const PRECACHE = [
   "{% static 'vendor/htmx-2.0.3.min.js' %}",
   "{% static 'icons/icon-192.png' %}",
 ];
+const SLOW_NETWORK_MS = 4000;
 // pages worth keeping a last-seen copy of for offline reading
 const PAGES = ["/", "{% url 'startsit' %}", "{% url 'waivers' %}", "{% url 'trades' %}"];
 
@@ -46,17 +47,26 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (req.mode === "navigate" && PAGES.includes(url.pathname)) {
+    const network = fetch(req).then((res) => {
+      // don't cache the login redirect or errors as if they were the page
+      if (res.ok && !res.redirected) {
+        const copy = res.clone();
+        caches.open(CACHE).then((cache) => cache.put(req, copy));
+      }
+      return res;
+    });
+    event.waitUntil(network.catch(() => {}));  // keep refreshing the cache after we answer
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          // don't cache the login redirect or errors as if they were the page
-          if (res.ok && !res.redirected) {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match(req).then((hit) => hit || caches.match(OFFLINE_URL)))
+      new Promise((resolve) => {
+        let settled = false;
+        const answer = (res) => { if (!settled && res) { settled = true; resolve(res); } };
+        network.then(answer, () =>
+          caches.match(req).then((hit) => hit || caches.match(OFFLINE_URL)).then(answer)
+        );
+        // a sleeping free-tier server takes ~1 min to wake: show the last copy instead of a blank wait
+        // (if nothing is cached, `answer` ignores the miss and we keep waiting for the network)
+        setTimeout(() => caches.match(req).then(answer), SLOW_NETWORK_MS);
+      })
     );
     return;
   }
