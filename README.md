@@ -79,7 +79,7 @@ Open `https://<app>.fly.dev` and sign in, then:
 
 It opens full-screen like a native app. Recently viewed pages stay readable offline.
 
-Keep the database close to the Fly region (`iad`, Virginia) since every page queries it. Render's free Postgres tier expires after a fixed period, so check its expiry date on Render and plan to upgrade or recreate it.
+Keep the database close to the Fly region (`ewr`, Newark) since every page queries it. Render's free Postgres tier expires after a fixed period, so check its expiry date on Render and plan to upgrade or recreate it.
 
 ### When ESPN cookies expire
 

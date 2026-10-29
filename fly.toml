@@ -1,6 +1,7 @@
-# Fly.io config. `fly launch --no-deploy --copy-config` adopts this file; change `app` if the name is taken.
+# Fly.io config for WaiverWise. See https://fly.io/docs/reference/configuration/
 app = "waiverwise"
-primary_region = "iad"
+primary_region = "ewr"
+console_command = "/app/manage.py shell"
 
 [env]
   DEBUG = "false"
