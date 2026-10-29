@@ -46,6 +46,7 @@
           {{ row.player.name }} <span class="muted">{{ row.player.position }} · {{ row.player.pro_team }}</span>
           {% if row.player.injury_status and row.player.injury_status != "ACTIVE" %}<span class="tag">{{ row.player.injury_status|title }}</span>{% endif %}
           {% if row.locked %}<span class="tag">locked</span>{% endif %}
+          {% if row.pending %}<span class="tag">{{ row.pending }}</span>{% endif %}
         </td>
         <td>{{ row.opponent }}</td>
         {% if row.projection %}

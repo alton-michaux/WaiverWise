@@ -14,7 +14,7 @@ from analysis import trades
 from analysis.season import SeasonEvaluator
 from analysis.value import PlayerValue, vorp
 from analysis.waivers import WeeklyPlayer, evaluate, roster_capacity, streamers
-from league.models import League, Matchup, Player, ProGame, RosterEntry, Team
+from league.models import League, Matchup, PendingMove, Player, ProGame, RosterEntry, Team
 from nfl.consensus import game_started, remaining_weeks, week_kickoffs, weekly_projections
 from nfl.models import Usage
 
@@ -29,6 +29,7 @@ class PlayerRow:
     projection: Projection | None
     opponent: str
     locked: bool
+    pending: str = ""
 
 
 def current_league() -> League:
@@ -37,6 +38,25 @@ def current_league() -> League:
 
 def my_team(league: League) -> Team:
     return league.teams.get(espn_id=settings.ESPN_MY_TEAM_ID)
+
+
+def tied_up(league: League) -> dict[int, str]:
+    """Player pk -> label for players in an accepted trade or pending waiver claim."""
+    teams = dict(league.teams.values_list("espn_id", "name"))
+    players = dict(Player.objects.values_list("espn_id", "pk"))
+    labels = {}
+    for move in PendingMove.objects.filter(league=league):
+        for item in move.items:
+            pk = players.get(item["player_id"])
+            if pk is None:
+                continue
+            if move.kind == PendingMove.TRADE:
+                labels[pk] = f"Accepted trade → {teams.get(item['to_team'], 'unknown')}"
+            elif item["to_team"] == 0:
+                labels[pk] = "Pending waiver drop"
+            else:
+                labels[pk] = "Waiver claim pending"
+    return labels
 
 
 def opponent_of(team: Team, week: int) -> Team | None:
@@ -53,6 +73,7 @@ def roster_spots(team: Team, week: int) -> tuple[list[RosterSpot], dict[int, Pla
     proj = weekly_projections(league, players, range(week, week + 1))
     kickoffs = week_kickoffs(league.season, week)
     opponents = dict(ProGame.objects.filter(season=league.season, week=week).values_list("team", "opponent"))
+    pending = tied_up(league)
 
     spots, rows = [], {}
     for e in entries:
@@ -60,7 +81,9 @@ def roster_spots(team: Team, week: int) -> tuple[list[RosterSpot], dict[int, Pla
         locked = game_started(kickoffs.get(p.pro_team))
         projection = proj[(p.pk, week)]
         spots.append(RosterSpot(p.pk, tuple(p.eligible_slots), e.lineup_slot, projection, locked))
-        rows[p.pk] = PlayerRow(p, e.lineup_slot, projection, opponents.get(p.pro_team, "BYE"), locked)
+        rows[p.pk] = PlayerRow(
+            p, e.lineup_slot, projection, opponents.get(p.pro_team, "BYE"), locked, pending.get(p.pk, "")
+        )
     return spots, rows
 
 
@@ -114,6 +137,7 @@ class WaiverRow:
     next_week_gain: float
     ros_gain: float
     trend: Trend | None
+    pending: str = ""
 
 
 def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
@@ -134,8 +158,14 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
     free_agents = [p for p in players if p.fa_status and p.pk not in rostered and ros_points(p) > 0]
 
     fa_weekly = [weekly(p) for p in free_agents]
+    pending = tied_up(league)
     report = evaluate(
-        [weekly(p) for p in mine], fa_weekly, league.lineup_slots, weeks, baseline=streamers(fa_weekly, weeks)
+        [weekly(p) for p in mine],
+        fa_weekly,
+        league.lineup_slots,
+        weeks,
+        baseline=streamers(fa_weekly, weeks),
+        protected=set(pending),
     )
     values = vorp(
         [PlayerValue(p.pk, p.position, ros_points(p)) for p in players if p.pk in rostered or p in free_agents],
@@ -162,6 +192,7 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
                 next_week_gain=t.next_week_gain,
                 ros_gain=t.ros_gain,
                 trend=trend(usage[p.pk]) if p.position in TREND_POSITIONS else None,
+                pending=pending.get(p.pk, ""),
             )
         )
     # most targets gain nothing; fall back to league-wide value so the list stays useful
@@ -200,6 +231,7 @@ class TradeContext:
         free_agents = [w for pk, w in self.weekly.items() if pk not in rostered and self.players[pk].fa_status]
         self.season = SeasonEvaluator(league.lineup_slots, self.weeks, streamers(free_agents, self.weeks))
         self.capacity = roster_capacity(league.lineup_slots)
+        self.tied_up = tied_up(league)
 
     def ros_points(self, pid: int) -> float:
         return round(sum(self.weekly[pid].mean(w) for w in self.weeks), 2)
@@ -215,17 +247,20 @@ class TradeContext:
         )
 
     def find(self, team: Team, partner: Team) -> list[trades.Trade]:
-        return trades.find_trades(self.season, self.rosters[team.pk], self.rosters[partner.pk], self.capacity)
+        return trades.find_trades(
+            self.season, self.rosters[team.pk], self.rosters[partner.pk], self.capacity, exclude=set(self.tied_up)
+        )
 
 
 @dataclass
 class TradeRow:
     player: Player
     ros_points: float
+    pending: str = ""
 
 
 def trade_rows(ctx: TradeContext, ids: list[int]) -> list[TradeRow]:
-    return [TradeRow(ctx.players[i], ctx.ros_points(i)) for i in ids]
+    return [TradeRow(ctx.players[i], ctx.ros_points(i), ctx.tied_up.get(i, "")) for i in ids]
 
 
 def roster_choices(ctx: TradeContext, team: Team) -> list[TradeRow]:

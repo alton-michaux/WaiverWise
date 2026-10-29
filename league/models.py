@@ -118,3 +118,19 @@ class ProGame(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["season", "week", "team"], name="uniq_pro_game")
         ]
+
+
+class PendingMove(models.Model):
+    """An accepted trade awaiting processing, or a pending waiver claim. Replaced on each sync."""
+
+    TRADE, WAIVER = "trade", "waiver"
+
+    league = models.ForeignKey(League, on_delete=models.CASCADE, related_name="pending_moves")
+    espn_id = models.CharField(max_length=40)
+    kind = models.CharField(max_length=10, choices=[(TRADE, "Accepted trade"), (WAIVER, "Waiver claim")])
+    team_espn_id = models.PositiveSmallIntegerField()
+    # [{"player_id", "from_team", "to_team", "type"}] with ESPN ids; team 0 = free agency
+    items = models.JSONField(default=list)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["league", "espn_id"], name="uniq_pending_move")]

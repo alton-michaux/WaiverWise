@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from league import espn_client
-from league.models import League, Matchup, Player, PlayerWeek, ProGame, RosterEntry, Team
+from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
 
 
 class Command(BaseCommand):
@@ -20,7 +20,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Synced {league}: week {league.current_week}, {len(data.teams)} teams, "
-                f"{len(data.players)} players"
+                f"{len(data.players)} players, {len(data.pending)} pending moves"
             )
         )
 
@@ -109,4 +109,9 @@ class Command(BaseCommand):
                     team_a=teams[t.espn_id],
                     defaults=dict(team_b=teams[opp_id], score_a=score, score_b=scores[(opp_id, week)]),
                 )
+        PendingMove.objects.filter(league=league).delete()
+        PendingMove.objects.bulk_create(
+            PendingMove(league=league, espn_id=m.espn_id, kind=m.kind, team_espn_id=m.team_id, items=m.items)
+            for m in data.pending
+        )
         return league

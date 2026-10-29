@@ -76,10 +76,12 @@ def evaluate(
     slots: dict[str, int],
     weeks: range,
     baseline: list[WeeklyPlayer] = (),
+    protected: set[int] = frozenset(),
 ) -> WaiverReport:
     """`roster` should exclude IR-slotted players; they don't use a roster spot.
 
     `baseline` players (see `streamers`) are available to every lineup without a roster spot.
+    `protected` player ids are never chosen as the drop (e.g. already in a pending move).
     """
     season = SeasonEvaluator(slots, weeks, baseline)
     base = frozenset(roster)
@@ -88,7 +90,7 @@ def evaluate(
 
     drop, drop_cost = None, 0.0
     if len(roster) >= roster_capacity(slots):
-        drop, cost = season.cheapest_drop(base)
+        drop, cost = season.cheapest_drop(base, frozenset(p for p in base if p.id in protected))
         drop_cost = round(cost, 2)
     kept = base - {drop} if drop else base
 

@@ -52,3 +52,10 @@ def test_finder_returns_mutual_wins_only():
     best = trades[0]
     assert len(best.a.gives) == len(best.a.gets) == 1  # simple RB-for-WR swap
     assert best.a.gives[0] in (2, 3) and best.a.gets[0] in (12, 13)
+
+
+def test_finder_skips_excluded_players():
+    a = [wp(1, "QB", 20), wp(2, "RB", 15), wp(3, "RB", 14), wp(4, "WR", 5)]
+    b = [wp(11, "QB", 20), wp(12, "WR", 15), wp(13, "WR", 14), wp(14, "RB", 5)]
+    trades = find_trades(season(), a, b, CAP, exclude={2, 3})
+    assert all(not set(t.a.gives) & {2, 3} for t in trades)

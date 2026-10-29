@@ -56,6 +56,15 @@ class ProGameData:
 
 
 @dataclass
+class PendingMoveData:
+    espn_id: str
+    kind: str  # "trade" (accepted, awaiting processing) or "waiver" (pending claim)
+    team_id: int  # team that initiated it
+    # [{"player_id", "from_team", "to_team", "type"}]; team 0 = free agency
+    items: list[dict]
+
+
+@dataclass
 class LeagueData:
     espn_id: int
     season: int
@@ -69,6 +78,7 @@ class LeagueData:
     teams: list[TeamData]
     players: list[PlayerData]
     pro_games: list[ProGameData]
+    pending: list[PendingMoveData]
 
 
 def fetch_league(league_id: int, season: int, espn_s2: str | None, swid: str | None) -> LeagueData:
@@ -97,6 +107,7 @@ def fetch_league(league_id: int, season: int, espn_s2: str | None, swid: str | N
         teams=teams,
         players=players,
         pro_games=_pro_games(pro_schedule),
+        pending=_pending_moves(league),
     )
 
 
@@ -175,6 +186,59 @@ def _free_agent_status(league: EspnLeague) -> dict[int, tuple[str, datetime | No
         p["id"]: (p["status"], _from_ms(p.get("waiverProcessDate")) if p["status"] == "WAIVERS" else None)
         for p in data["players"]
     }
+
+
+PENDING_LOOKBACK_WEEKS = 2
+DEAD_TRADE_TYPES = {"TRADE_DECLINE", "TRADE_VETO", "TRADE_ERROR"}
+
+
+def _pending_moves(league: EspnLeague) -> list[PendingMoveData]:
+    """Accepted-but-unprocessed trades and pending waiver claims.
+
+    ESPN never updates a proposal's or claim's own status; acceptance, cancellation, vetoes
+    and waiver outcomes are separate transactions whose relatedTransactionId points back.
+    Waiver claims are only visible for the authenticated owner's team.
+    """
+    txns = {}
+    for week in range(max(1, league.current_week - PENDING_LOOKBACK_WEEKS), league.current_week + 1):
+        data = league.espn_request.league_get(params={"view": "mTransactions2", "scoringPeriodId": week})
+        for t in data.get("transactions", []):
+            txns[t["id"]] = t
+
+    related = {}
+    for t in txns.values():
+        if t.get("relatedTransactionId"):
+            related.setdefault(t["relatedTransactionId"], set()).add((t.get("type"), t.get("status")))
+
+    moves = []
+    for t in txns.values():
+        if t.get("status") != "PENDING":
+            continue
+        links = related.get(t["id"], set())
+        if t.get("type") == "TRADE_PROPOSAL":
+            accepted = any(kind == "TRADE_ACCEPT" for kind, _ in links)
+            dead = any(kind in DEAD_TRADE_TYPES or status == "CANCELED" for kind, status in links)
+            if not accepted or dead:
+                continue
+            kind = "trade"
+        elif t.get("type") == "WAIVER":
+            if links:  # processed claims keep PENDING; the outcome is a linked transaction
+                continue
+            kind = "waiver"
+        else:
+            continue
+        moves.append(
+            PendingMoveData(
+                espn_id=t["id"],
+                kind=kind,
+                team_id=t["teamId"],
+                items=[
+                    {"player_id": i["playerId"], "from_team": i["fromTeamId"], "to_team": i["toTeamId"], "type": i["type"]}
+                    for i in t.get("items", [])
+                ],
+            )
+        )
+    return moves
 
 
 def _from_ms(ms: int | None) -> datetime | None:

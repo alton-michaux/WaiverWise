@@ -61,3 +61,9 @@ def test_streamers_level_is_nth_best():
     fas = [wp(1, "K", 9, 9), wp(2, "K", 8, 7), wp(3, "K", 6, 8), wp(4, "K", 1, 1)]
     (k,) = streamers(fas, WEEKS)
     assert (k.position, k.mean(8), k.mean(9)) == ("K", 6, 7)
+
+
+def test_protected_player_is_never_the_drop():
+    roster = [wp(1, "QB", 20, 20), wp(2, "RB", 10, 10), wp(3, "RB", 5, 5)]
+    report = evaluate(roster, [wp(10, "RB", 12, 12)], SLOTS, WEEKS, protected={3})
+    assert report.drop_id != 3

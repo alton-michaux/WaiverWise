@@ -65,8 +65,8 @@ def evaluate(
     )
 
 
-def _pool(season: SeasonEvaluator, roster: list[WeeklyPlayer]) -> list[WeeklyPlayer]:
-    tradeable = [p for p in roster if p.position not in FINDER_SKIP_POSITIONS]
+def _pool(season: SeasonEvaluator, roster: list[WeeklyPlayer], exclude: set[int]) -> list[WeeklyPlayer]:
+    tradeable = [p for p in roster if p.position not in FINDER_SKIP_POSITIONS and p.id not in exclude]
     return sorted(tradeable, key=lambda p: -sum(p.mean(w) for w in season.weeks))[:FINDER_POOL]
 
 
@@ -76,9 +76,13 @@ def find_trades(
     theirs: list[WeeklyPlayer],
     capacity: int,
     min_gain: float = 1.0,
+    exclude: set[int] = frozenset(),
 ) -> list[Trade]:
-    """Packages up to FINDER_MAX_SIZE per side where both teams gain at least `min_gain`."""
-    my_pool, their_pool = _pool(season, mine), _pool(season, theirs)
+    """Packages up to FINDER_MAX_SIZE per side where both teams gain at least `min_gain`.
+
+    `exclude` holds player ids that can't be offered (e.g. already in an accepted trade).
+    """
+    my_pool, their_pool = _pool(season, mine, exclude), _pool(season, theirs, exclude)
     found = []
     for n_give in range(1, FINDER_MAX_SIZE + 1):
         for n_get in range(1, FINDER_MAX_SIZE + 1):

@@ -43,15 +43,17 @@
     <fieldset>
       <legend><strong>You give</strong></legend>
       {% for r in my_roster %}
-        <label><input type="checkbox" name="give" value="{{ r.player.pk }}" {% if r.player.pk in give %}checked{% endif %}>
-          {{ r.player.name }} <span class="muted">{{ r.player.position }} · ROS {{ r.ros_points|pts }}</span></label>
+        <label><input type="checkbox" name="give" value="{{ r.player.pk }}" {% if r.player.pk in give %}checked{% endif %} {% if r.pending %}disabled{% endif %}>
+          {{ r.player.name }} <span class="muted">{{ r.player.position }} · ROS {{ r.ros_points|pts }}</span>
+          {% if r.pending %}<span class="tag">{{ r.pending }}</span>{% endif %}</label>
       {% endfor %}
     </fieldset>
     <fieldset>
       <legend><strong>You get</strong></legend>
       {% for r in their_roster %}
-        <label><input type="checkbox" name="get" value="{{ r.player.pk }}" {% if r.player.pk in get %}checked{% endif %}>
-          {{ r.player.name }} <span class="muted">{{ r.player.position }} · ROS {{ r.ros_points|pts }}</span></label>
+        <label><input type="checkbox" name="get" value="{{ r.player.pk }}" {% if r.player.pk in get %}checked{% endif %} {% if r.pending %}disabled{% endif %}>
+          {{ r.player.name }} <span class="muted">{{ r.player.position }} · ROS {{ r.ros_points|pts }}</span>
+          {% if r.pending %}<span class="tag">{{ r.pending }}</span>{% endif %}</label>
       {% endfor %}
     </fieldset>
   </div>
@@ -59,7 +61,7 @@
 </form>
 
 <h3>Trade finder</h3>
-<p class="muted">Up to 2-for-1 packages from each roster's top 8 non-K/DST players where both teams' rest-of-season lineups gain at least 1 point. Loads one team at a time.</p>
+<p class="muted">Up to 2-for-1 packages from each roster's top 8 non-K/DST players (skipping anyone in an accepted trade or pending waiver claim) where both teams' rest-of-season lineups gain at least 1 point. Loads one team at a time.</p>
 {% for t in others %}
   <div hx-get="{% url 'trade_finder' %}?team={{ team.espn_id }}&partner={{ t.espn_id }}" hx-trigger="load" hx-swap="outerHTML">
     <p aria-busy="true">{{ t.name }}…</p>

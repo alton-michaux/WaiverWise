@@ -61,8 +61,8 @@ def trades(request):
 
     give = [int(i) for i in request.GET.getlist("give") if i.isdigit()]
     get = [int(i) for i in request.GET.getlist("get") if i.isdigit()]
-    mine = {r.player.pk for r in services.roster_choices(ctx, team)}
-    theirs = {r.player.pk for r in services.roster_choices(ctx, partner)}
+    mine = {r.player.pk for r in services.roster_choices(ctx, team) if not r.pending}
+    theirs = {r.player.pk for r in services.roster_choices(ctx, partner) if not r.pending}
     give = [i for i in give if i in mine]
     get = [i for i in get if i in theirs]
     result = services.describe(ctx, ctx.evaluate(team, partner, give, get)) if give and get else None

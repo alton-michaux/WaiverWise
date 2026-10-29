@@ -43,6 +43,7 @@
         <td>
           {{ r.player.name }} <span class="muted">{{ r.player.position }} · {{ r.player.pro_team }}</span>
           {% if r.player.injury_status and r.player.injury_status != "ACTIVE" %}<span class="tag">{{ r.player.injury_status|title }}</span>{% endif %}
+          {% if r.pending %}<span class="tag">{{ r.pending }}</span>{% endif %}
           {% if r.player.fa_status == "WAIVERS" %}<span class="tag" title="Claim before waivers clear">Waivers · clears {{ r.player.waiver_clears|date:"D g:ia" }}</span>{% endif %}
         </td>
         <td class="num">{{ r.player.percent_owned|floatformat:0 }}</td>
