@@ -1,0 +1,8 @@
+<article class="explanation">
+  {% if error %}
+    <p class="move-out">{{ error }}</p>
+  {% else %}
+    {{ text|linebreaks }}
+    <footer><small class="muted">Written by Claude from the numbers on this page. It can misread them, so double-check before acting.</small></footer>
+  {% endif %}
+</article>

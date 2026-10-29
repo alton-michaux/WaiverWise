@@ -52,10 +52,11 @@ def tied_up(league: League) -> dict[int, str]:
                 continue
             if move.kind == PendingMove.TRADE:
                 labels[pk] = f"Accepted trade → {teams.get(item['to_team'], 'unknown')}"
+            # ESPN only exposes the authenticated owner's waiver claims, so these are always the user's
             elif item["to_team"] == 0:
-                labels[pk] = "Pending waiver drop"
+                labels[pk] = "Dropping in your pending claim"
             else:
-                labels[pk] = "Waiver claim pending"
+                labels[pk] = "Your claim is pending"
     return labels
 
 
@@ -137,6 +138,7 @@ class WaiverRow:
     next_week_gain: float
     ros_gain: float
     trend: Trend | None
+    drop: Player | None = None
     pending: str = ""
 
 
@@ -192,6 +194,7 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
                 next_week_gain=t.next_week_gain,
                 ros_gain=t.ros_gain,
                 trend=trend(usage[p.pk]) if p.position in TREND_POSITIONS else None,
+                drop=by_id.get(t.drop_id),
                 pending=pending.get(p.pk, ""),
             )
         )

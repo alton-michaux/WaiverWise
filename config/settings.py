@@ -73,3 +73,9 @@ ESPN_SEASON = env.int("ESPN_SEASON", default=2026)
 ESPN_S2 = env("ESPN_S2", default=None)
 ESPN_SWID = env("ESPN_SWID", default=None)
 ESPN_MY_TEAM_ID = env.int("ESPN_MY_TEAM_ID", default=None)
+
+# Claude explanations (optional)
+ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default=None)
+ANTHROPIC_WORKSPACE_ID = env("ANTHROPIC_WORKSPACE_ID", default=None)  # only for keys not scoped to a workspace
+# cheapest current model by default; e.g. claude-sonnet-5-5 or claude-opus-5-5 for richer write-ups
+CLAUDE_MODEL = env("CLAUDE_MODEL", default="claude-haiku-5-5")
