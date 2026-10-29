@@ -57,7 +57,7 @@ CI (`.github/workflows/tests.yml`) runs the suite against Postgres 16 on every P
 
 1. Render dashboard → **New → Blueprint** → pick this repo. It reads `render.yaml`.
 2. Before applying, set `region` in `render.yaml` to your database's region (the hostname in its URL shows it, e.g. `dpg-xxxx-a.ohio-postgres.render.com`; this repo uses `ohio`). The internal database URL only works within the same region.
-3. Fill in the prompted secrets. For `DATABASE_URL`, use the database's **Internal** URL. `SECRET_KEY` is generated for you.
+3. Fill in the prompted values: `DATABASE_URL` (the database's **Internal** URL), `ANTHROPIC_API_KEY`, and `ESPN_MY_TEAM_ID`. `SECRET_KEY` is generated for you. ESPN cookies aren't needed on Render, since syncs run in GitHub Actions.
 4. Create an account once it's live: Render dashboard → the service → **Shell**, then `python manage.py createsuperuser`.
 
 The service deploys from `master`. Merging `dev` into `master` is a release.
@@ -92,4 +92,4 @@ It opens full-screen like a native app. Recently viewed pages stay readable offl
 
 ### When ESPN cookies expire
 
-A red banner appears in the app and the sync workflow fails. Grab fresh `espn_s2` / `SWID` cookies and update them in both places: the GitHub Actions secrets (used by syncs) and the Render service's environment.
+A red banner appears in the app and the sync workflow fails. Grab fresh `espn_s2` / `SWID` cookies and update the `ESPN_S2` / `ESPN_SWID` GitHub Actions secrets. Render doesn't hold them: only the sync workflow talks to ESPN. Locally, update `.env`.
