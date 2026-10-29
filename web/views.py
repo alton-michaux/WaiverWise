@@ -1,15 +1,12 @@
-from django.db import connection
-from django.http import JsonResponse
+from django.conf import settings
+from django.contrib.auth.decorators import login_not_required
+from django.http import Http404, JsonResponse
+from django.templatetags.static import static
+from django.views.decorators.cache import cache_control
 from django.shortcuts import get_object_or_404, redirect, render
 
 from analysis.startsit import MODES
-from web import services
-
-
-def health(request):
-    with connection.cursor() as cur:
-        cur.execute("SELECT 1")
-    return JsonResponse({"status": "ok"})
+from web import narrate, services
 
 
 def home(request):
@@ -51,7 +48,7 @@ def waivers(request):
 FINDER_LIMIT = 5
 
 
-def trades(request):
+def _trade_context(request) -> dict:
     league = services.current_league()
     team = _team(request, league)
     others = league.teams.exclude(pk=team.pk).order_by("name")
@@ -66,24 +63,23 @@ def trades(request):
     give = [i for i in give if i in mine]
     get = [i for i in get if i in theirs]
     result = services.describe(ctx, ctx.evaluate(team, partner, give, get)) if give and get else None
+    return {
+        "league": league,
+        "team": team,
+        "partner": partner,
+        "teams": league.teams.order_by("name"),
+        "others": others,
+        "my_roster": services.roster_choices(ctx, team),
+        "their_roster": services.roster_choices(ctx, partner),
+        "give": give,
+        "get": get,
+        "result": result,
+        "weeks": ctx.weeks,
+    }
 
-    return render(
-        request,
-        "web/trades.html",
-        {
-            "league": league,
-            "team": team,
-            "partner": partner,
-            "teams": league.teams.order_by("name"),
-            "others": others,
-            "my_roster": services.roster_choices(ctx, team),
-            "their_roster": services.roster_choices(ctx, partner),
-            "give": give,
-            "get": get,
-            "result": result,
-            "weeks": ctx.weeks,
-        },
-    )
+
+def trades(request):
+    return render(request, "web/trades.html", _trade_context(request))
 
 
 def trade_finder(request):
@@ -103,3 +99,88 @@ def trade_finder(request):
             "total": len(found),
         },
     )
+
+
+def _startsit_payload(request):
+    league = services.current_league()
+    mode = request.GET.get("mode", "mean")
+    return narrate.startsit_payload(services.start_sit(_team(request, league), mode if mode in MODES else "mean"))
+
+
+def _waivers_payload(request):
+    league = services.current_league()
+    position = request.GET.get("position") or None
+    return narrate.waivers_payload(
+        services.waivers(_team(request, league), position if position in WAIVER_POSITIONS else None)
+    )
+
+
+def _trade_payload(request):
+    ctx = _trade_context(request)
+    if not ctx["result"]:
+        raise Http404("pick players on both sides first")
+    return narrate.trade_payload(ctx)
+
+
+EXPLAINERS = {"startsit": _startsit_payload, "waivers": _waivers_payload, "trade": _trade_payload}
+
+
+def explain(request, kind):
+    """HTMX partial: Claude's explanation of the page's current numbers (same query params as the page)."""
+    if kind not in EXPLAINERS:
+        raise Http404
+    try:
+        text, error = narrate.explain(kind, EXPLAINERS[kind](request)), None
+    except narrate.NarrationError as e:
+        text, error = None, str(e)
+    return render(request, "web/_explanation.html", {"text": text, "error": error})
+
+
+# --- PWA ---
+
+
+@login_not_required
+def manifest(request):
+    """Fetched by browsers without cookies, so it must not require login."""
+    icon = lambda name, size, purpose="any": {  # noqa: E731
+        "src": static(f"icons/{name}"),
+        "sizes": size,
+        "type": "image/png",
+        "purpose": purpose,
+    }
+    return JsonResponse(
+        {
+            "id": "/",
+            "name": "WaiverWise",
+            "short_name": "WaiverWise",
+            "description": "Start/sit, waiver, and trade help for your fantasy football league.",
+            "start_url": "/",
+            "scope": "/",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#0172ad",
+            "icons": [
+                icon("icon-192.png", "192x192"),
+                icon("icon-512.png", "512x512"),
+                icon("icon-maskable-512.png", "512x512", "maskable"),
+            ],
+        },
+        content_type="application/manifest+json",
+    )
+
+
+@login_not_required
+@cache_control(no_cache=True)
+def service_worker(request):
+    # served from the site root so its scope covers every page
+    return render(
+        request,
+        "web/sw.js",
+        {"version": settings.APP_VERSION},
+        content_type="application/javascript",
+    )
+
+
+@login_not_required
+def offline(request):
+    return render(request, "web/offline.html")

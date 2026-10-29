@@ -1,14 +1,16 @@
+name: waiverwise
+
 services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: fantasy_guru
-      POSTGRES_USER: guru
-      POSTGRES_PASSWORD: guru
+      POSTGRES_DB: waiverwise
+      POSTGRES_USER: waiverwise
+      POSTGRES_PASSWORD: waiverwise
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U guru -d fantasy_guru"]
+      test: ["CMD-SHELL", "pg_isready -U waiverwise -d waiverwise"]
       interval: 5s
       retries: 10
     restart: unless-stopped
@@ -18,7 +20,7 @@ services:
     command: python manage.py runserver 0.0.0.0:8000
     env_file: .env
     environment:
-      DATABASE_URL: postgres://guru:guru@db:5432/fantasy_guru
+      DATABASE_URL: postgres://waiverwise:waiverwise@db:5432/waiverwise
     ports:
       - "8000:8000"
     volumes:
@@ -34,7 +36,7 @@ services:
     command: python manage.py run_scheduler
     env_file: .env
     environment:
-      DATABASE_URL: postgres://guru:guru@db:5432/fantasy_guru
+      DATABASE_URL: postgres://waiverwise:waiverwise@db:5432/waiverwise
     volumes:
       - .:/app
       - /app/.venv

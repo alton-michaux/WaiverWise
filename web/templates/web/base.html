@@ -1,37 +1,58 @@
-<!doctype html>
+{% load static %}<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Fantasy Guru{% endblock %}</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css">
-  <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
-  <style>
-    table td, table th { padding: .35rem .5rem; font-size: .9rem; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
-    .muted { color: var(--pico-muted-color); }
-    .move-in { color: var(--pico-ins-color); font-weight: 600; }
-    .move-out { color: var(--pico-del-color); font-weight: 600; }
-    .tag { font-size: .75rem; padding: .05rem .35rem; border-radius: .25rem; background: var(--pico-muted-border-color); }
-    .stats { display: flex; gap: 2rem; flex-wrap: wrap; }
-    .stats div strong { display: block; font-size: 1.5rem; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}WaiverWise{% endblock %}</title>
+  <meta name="theme-color" content="#0172ad">
+  <link rel="manifest" href="{% url 'manifest' %}">
+  <link rel="icon" href="{% static 'icons/icon-192.png' %}" sizes="192x192">
+  {# iOS ignores manifest icons and needs these to run full-screen from the home screen #}
+  <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="WaiverWise">
+  <link rel="stylesheet" href="{% static 'vendor/pico-2.0.6.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script src="{% static 'vendor/htmx-2.0.3.min.js' %}" defer></script>
 </head>
 <body>
+  {% url 'startsit' as startsit_url %}{% url 'waivers' as waivers_url %}{% url 'trades' as trades_url %}
   <header class="container">
     <nav>
       <ul>
-        <li><strong>Fantasy Guru</strong></li>
-        {% if last_synced %}<li><small class="muted" title="{{ last_synced }}">synced {{ last_synced|timesince }} ago</small></li>{% endif %}
+        <li><a href="{% url 'home' %}" class="brand"><strong>WaiverWise</strong></a></li>
+        {% if user.is_authenticated and last_synced %}<li><small class="muted sync-age" title="{{ last_synced }}">synced {{ last_synced|timesince }} ago</small></li>{% endif %}
       </ul>
+      {% if user.is_authenticated %}
       <ul>
-        <li><a href="{% url 'startsit' %}">Start/Sit</a></li>
-        <li><a href="{% url 'waivers' %}">Waivers</a></li>
-        <li><a href="{% url 'trades' %}">Trades</a></li>
-        <li><a href="{% url 'admin:index' %}">Admin</a></li>
+        <li class="desktop-only"><a href="{{ startsit_url }}" {% if request.path == startsit_url %}aria-current="page"{% endif %}>Start/Sit</a></li>
+        <li class="desktop-only"><a href="{{ waivers_url }}" {% if request.path == waivers_url %}aria-current="page"{% endif %}>Waivers</a></li>
+        <li class="desktop-only"><a href="{{ trades_url }}" {% if request.path == trades_url %}aria-current="page"{% endif %}>Trades</a></li>
+        {% if user.is_staff %}<li class="desktop-only"><a href="{% url 'admin:index' %}">Admin</a></li>{% endif %}
+        <li>
+          <form method="post" action="{% url 'logout' %}" style="margin:0">{% csrf_token %}
+            <button type="submit" class="secondary outline signout">Sign out</button>
+          </form>
+        </li>
       </ul>
+      {% endif %}
     </nav>
   </header>
-  <main class="container">{% block content %}{% endblock %}</main>
+  <main class="container">
+    {% if user.is_authenticated and sync_problem %}<div class="banner" role="alert">{{ sync_problem }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  {% if user.is_authenticated %}
+  <nav class="tabbar" aria-label="Sections">
+    <a href="{{ startsit_url }}" {% if request.path == startsit_url %}aria-current="page"{% endif %}>Start/Sit</a>
+    <a href="{{ waivers_url }}" {% if request.path == waivers_url %}aria-current="page"{% endif %}>Waivers</a>
+    <a href="{{ trades_url }}" {% if request.path == trades_url %}aria-current="page"{% endif %}>Trades</a>
+  </nav>
+  {% endif %}
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("{% url 'service_worker' %}");
+  </script>
 </body>
 </html>

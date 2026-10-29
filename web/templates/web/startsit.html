@@ -1,5 +1,5 @@
 {% extends "web/base.html" %}
-{% load guru %}
+{% load waiverwise %}
 {% block title %}Start/Sit · Week {{ week }}{% endblock %}
 {% block content %}
 <hgroup>
@@ -32,29 +32,30 @@
     <p>Your lineup is already optimal for {{ mode }}.</p>
   {% endif %}
 </article>
+{% include "web/_explain_button.html" with kind="startsit" %}
 
 <div class="overflow-auto">
-<table class="striped">
+<table class="striped cards">
   <thead>
     <tr><th>Slot</th><th>Player</th><th>Opp</th><th class="num">Proj</th><th class="num">Floor</th><th class="num">Ceiling</th><th>Best slot</th></tr>
   </thead>
   <tbody>
     {% for row, best in rows %}
       <tr>
-        <td>{{ row.slot }}</td>
-        <td>
+        <td data-label="Slot">{{ row.slot }}</td>
+        <td class="card-title">
           {{ row.player.name }} <span class="muted">{{ row.player.position }} · {{ row.player.pro_team }}</span>
           {% if row.player.injury_status and row.player.injury_status != "ACTIVE" %}<span class="tag">{{ row.player.injury_status|title }}</span>{% endif %}
           {% if row.locked %}<span class="tag">locked</span>{% endif %}
           {% if row.pending %}<span class="tag">{{ row.pending }}</span>{% endif %}
         </td>
-        <td>{{ row.opponent }}</td>
+        <td data-label="Opp">{{ row.opponent }}</td>
         {% if row.projection %}
-          <td class="num">{{ row.projection.mean|pts }}</td><td class="num">{{ row.projection.floor|pts }}</td><td class="num">{{ row.projection.ceiling|pts }}</td>
+          <td class="num" data-label="Proj">{{ row.projection.mean|pts }}</td><td class="num" data-label="Floor">{{ row.projection.floor|pts }}</td><td class="num" data-label="Ceiling">{{ row.projection.ceiling|pts }}</td>
         {% else %}
-          <td class="num muted" colspan="3">bye</td>
+          <td class="num muted" colspan="3" data-label="Proj">bye</td>
         {% endif %}
-        <td>
+        <td data-label="Best slot">
           {% if best == row.slot or best in non_starting and row.slot in non_starting %}{{ best }}
           {% elif best in non_starting %}<span class="move-out">{{ best }}</span>
           {% else %}<span class="move-in">{{ best }}</span>{% endif %}

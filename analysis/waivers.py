@@ -38,11 +38,12 @@ class WaiverTarget:
     id: int
     next_week_gain: float
     ros_gain: float
+    drop_id: int | None  # best drop to make room for this player; None if there's an open spot
 
 
 @dataclass
 class WaiverReport:
-    drop_id: int | None  # None when there's an open roster spot
+    drop_id: int | None  # most expendable player overall; None when there's an open roster spot
     drop_cost: float  # ROS lineup points lost by dropping him
     targets: list[WaiverTarget]
 
@@ -88,20 +89,28 @@ def evaluate(
     base_ros = season.ros(base)
     base_next = season.week_points(base, weeks[0])
 
+    full = len(roster) >= roster_capacity(slots)
+    locked = frozenset(p for p in base if p.id in protected)
+
     drop, drop_cost = None, 0.0
-    if len(roster) >= roster_capacity(slots):
-        drop, cost = season.cheapest_drop(base, frozenset(p for p in base if p.id in protected))
+    if full:
+        drop, cost = season.cheapest_drop(base, locked)
         drop_cost = round(cost, 2)
-    kept = base - {drop} if drop else base
 
     targets = []
     for fa in free_agents:
-        with_fa = kept | {fa}
+        with_fa = base | {fa}
+        fa_drop = None
+        if full:
+            # the best drop depends on who's added: a new kicker should replace the old kicker
+            fa_drop, _ = season.cheapest_drop(with_fa, locked | {fa})
+            with_fa = with_fa - {fa_drop}
         targets.append(
             WaiverTarget(
                 id=fa.id,
                 next_week_gain=round(season.week_points(with_fa, weeks[0]) - base_next, 2),
                 ros_gain=round(season.ros(with_fa) - base_ros, 2),
+                drop_id=fa_drop.id if fa_drop else None,
             )
         )
     targets.sort(key=lambda t: (t.ros_gain, t.next_week_gain), reverse=True)

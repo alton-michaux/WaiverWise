@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import timedelta
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -6,6 +7,8 @@ from apscheduler.triggers.cron import CronTrigger
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
 from django.utils import timezone
 
 from league.models import League
@@ -25,6 +28,20 @@ JOBS = [
 ]
 # WSL / Docker may have been off: catch up on start if data is older than this
 STALE_AFTER = timedelta(hours=6)
+MIGRATION_POLL_SECONDS = 5
+
+
+def wait_for_migrations():
+    """Block until the schema is current, so a fresh deploy doesn't crash-loop the scheduler."""
+    while True:
+        try:
+            executor = MigrationExecutor(connection)
+            if not executor.migration_plan(executor.loader.graph.leaf_nodes()):
+                return
+        except Exception:
+            log.exception("couldn't check migrations")
+        log.info("waiting for migrations to be applied")
+        time.sleep(MIGRATION_POLL_SECONDS)
 
 
 def run(steps: list[str]):
@@ -39,6 +56,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+        wait_for_migrations()
         scheduler = BlockingScheduler(timezone=settings.TIME_ZONE)
         for job_id, steps, cron in JOBS:
             scheduler.add_job(
