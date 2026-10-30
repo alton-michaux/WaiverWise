@@ -10,7 +10,7 @@
 <form method="get">
   <input type="hidden" name="team" value="{{ team.espn_id }}">
   <label>Trade partner
-    <select name="partner" onchange="this.form.submit()">
+    <select name="partner" onchange="this.form.requestSubmit()">
       {% for t in others %}<option value="{{ t.espn_id }}" {% if t.pk == partner.pk %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
     </select>
   </label>
