@@ -82,6 +82,50 @@
       if (e.detail.successful || root.classList.contains("navigating")) return;  // leaving the page aborts requests
       e.detail.target.innerHTML = '<p class="move-out">Couldn\'t load this. Reload the page to try again.</p>';
     });
+
+    // the service worker answered with a saved copy (slow or unreachable server): say so, then swap in the latest
+    if ("savedAt" in root.dataset) {
+      const when = new Date(root.dataset.savedAt);
+      const label = isNaN(when) ? "" : ` from ${when.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`;
+      const note = document.createElement("div");
+      note.className = "saved-copy";
+      note.setAttribute("role", "status");
+      const showNote = (text, busy) => {
+        note.textContent = `Showing your saved copy${label}. ${text}`;
+        if (busy) note.insertAdjacentHTML("afterbegin", '<span aria-busy="true"></span> ');
+      };
+      showNote("Getting the latest…", true);
+      document.querySelector("main").prepend(note);
+
+      let retryTimer;
+      const retry = () => {
+        clearTimeout(retryTimer);
+        window.removeEventListener("online", retry);
+        showNote("Getting the latest…", true);
+        refresh();
+      };
+      const refresh = async () => {
+        try {
+          const res = await fetch(location.href, { cache: "no-store", headers: { "X-Fresh-Copy": "1" } });
+          if (res.redirected) return location.assign(res.url);  // signed out while this was cached
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const fresh = new DOMParser().parseFromString(await res.text(), "text/html");
+          for (const part of ["body > header", "body > main"]) {
+            document.querySelector(part).replaceWith(fresh.querySelector(part));
+          }
+          document.title = fresh.title;
+          delete root.dataset.savedAt;
+          window.htmx?.process(document.querySelector("main"));
+        } catch {
+          if (root.classList.contains("navigating")) return;  // leaving the page aborts requests
+          showNote("Can't reach the server right now. Will keep trying.", false);
+          // "online" can fire before the network really works, and a waking server sends no event at all
+          window.addEventListener("online", retry);
+          retryTimer = setTimeout(retry, 15000);
+        }
+      };
+      refresh();
+    }
   </script>
 </body>
 </html>
