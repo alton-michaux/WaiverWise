@@ -7,6 +7,7 @@ from web import views
 urlpatterns = [
     path("", views.home, name="home"),
     path("startsit/", views.startsit, name="startsit"),
+    path("startsit/moves/", views.moves_badge, name="moves_badge"),
     path("waivers/", views.waivers, name="waivers"),
     path("trades/", views.trades, name="trades"),
     path("trades/find/", views.trade_finder, name="trade_finder"),

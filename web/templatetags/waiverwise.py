@@ -28,3 +28,18 @@ def short_age(value):
     if minutes < 60:
         return f"{max(minutes, 0)}m"
     return f"{minutes // 60}h" if minutes < 60 * 24 else f"{minutes // (60 * 24)}d"
+
+
+SLOT_LABELS = {"RB/WR/TE": "FLEX"}
+STATUS_LABELS = {"INJURY_RESERVE": "IR"}
+
+
+@register.filter
+def slot_label(slot):
+    return SLOT_LABELS.get(slot, slot)
+
+
+@register.filter
+def status_label(status):
+    """ESPN's QUESTIONABLE / INJURY_RESERVE as people say them."""
+    return STATUS_LABELS.get(status, status.replace("_", " ").capitalize())

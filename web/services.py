@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 
 from django.conf import settings
 from django.db.models import Q
@@ -18,6 +19,8 @@ from league.models import League, Matchup, PendingMove, Player, ProGame, RosterE
 from nfl.consensus import game_started, remaining_weeks, week_kickoffs, weekly_projections
 from nfl.models import Usage
 
+BAR_SCALE_POINTS = 40  # a full-width range bar on the lineup
+
 # display order for lineup slots
 SLOT_ORDER = ["QB", "RB", "WR", "TE", "RB/WR/TE", "OP", "D/ST", "K", "BE", "IR"]
 
@@ -30,6 +33,15 @@ class PlayerRow:
     opponent: str
     locked: bool
     pending: str = ""
+
+    @property
+    def bar(self) -> dict | None:
+        """Positions, as % of the row's bar, for drawing floor to ceiling with a tick at the projection."""
+        p = self.projection
+        if p is None or self.locked or p.ceiling <= 0:
+            return None
+        at = lambda points: round(min(points / BAR_SCALE_POINTS, 1) * 100, 1)  # noqa: E731
+        return {"left": at(p.floor), "width": round(at(p.ceiling) - at(p.floor), 1), "mark": at(p.mean)}
 
 
 def current_league() -> League:
@@ -104,6 +116,7 @@ def start_sit(team: Team, mode: str = "mean") -> dict:
     opponent = opponent_of(team, week)
     opp_spots = roster_spots(opponent, week)[0] if opponent else None
     rec: Recommendation = recommend(spots, league.lineup_slots, opp_spots, mode)
+    moves = [(rows[i], rows[o] if o is not None else None) for i, o in rec.moves]
 
     best_slot = {pid: slot for slot, ids in rec.best.items() for pid in ids}
     for spot in spots:
@@ -122,6 +135,7 @@ def start_sit(team: Team, mode: str = "mean") -> dict:
             ),
         )
 
+    lineup = [(r, best_slot.get(r.player.pk, "BE")) for r in ordered(lambda r: r.slot)]
     return {
         "league": league,
         "team": team,
@@ -129,10 +143,42 @@ def start_sit(team: Team, mode: str = "mean") -> dict:
         "week": week,
         "mode": mode,
         "rec": rec,
-        "rows": [(r, best_slot.get(r.player.pk, "BE")) for r in ordered(lambda r: r.slot)],
-        "moves": [(rows[i], rows[o]) for i, o in rec.moves],
+        "rows": lineup,
+        "starter_rows": [(r, best) for r, best in lineup if r.slot not in NON_STARTING],
+        "bench_rows": [(r, best) for r, best in lineup if r.slot in NON_STARTING],
+        "moves": moves,
+        "move_deadline": move_deadline(moves, week_kickoffs(league.season, week)),
+        "points_gain": round(rec.best_points - rec.current_points, 2),
+        "win": win_summary(rec),
         "non_starting": NON_STARTING,
     }
+
+
+def move_deadline(moves: list[tuple[PlayerRow, PlayerRow | None]], kickoffs: dict) -> datetime | None:
+    """When the first player involved in a move kicks off, which is when that move stops being possible."""
+    upcoming = (kickoffs.get(row.player.pro_team) for pair in moves for row in pair if row)
+    return min((k for k in upcoming if k and not game_started(k)), default=None)
+
+
+def win_summary(rec: Recommendation) -> dict | None:
+    """Win chance before and after the moves, in percent. None when there's no opponent to simulate."""
+    if rec.current_win_prob is None or rec.best_win_prob is None:
+        return None
+    now, best = rec.current_win_prob * 100, rec.best_win_prob * 100
+    return {
+        "now": round(now, 1),
+        "best": round(best, 1),
+        "bar_low": round(min(now, best), 1),
+        "bar_gain": round(abs(best - now), 1),
+        "cost": round(now - best, 1) if best < now else 0,  # a safer lineup can lower your win chance
+    }
+
+
+def move_count(team: Team) -> int:
+    """How many moves the default mode recommends. Skips the simulation, so it's cheap enough for any page."""
+    league = team.league
+    spots, _ = roster_spots(team, league.current_week)
+    return len(recommend(spots, league.lineup_slots).moves)
 
 
 TREND_POSITIONS = {"QB", "RB", "WR", "TE"}
