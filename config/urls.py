@@ -10,7 +10,7 @@ urlpatterns = [
     path("startsit/moves/", views.moves_badge, name="moves_badge"),
     path("waivers/", views.waivers, name="waivers"),
     path("trades/", views.trades, name="trades"),
-    path("trades/find/", views.trade_finder, name="trade_finder"),
+    path("trades/best/", views.best_deals, name="best_deals"),
     path("explain/<str:kind>/", views.explain, name="explain"),
     path("login/", auth_views.LoginView.as_view(template_name="web/login.html", redirect_authenticated_user=True), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),

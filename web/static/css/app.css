@@ -65,7 +65,7 @@ table td, table th { padding: .35rem .5rem; font-size: .9rem; }
 .move-in { color: var(--pico-ins-color); font-weight: 600; }
 .move-out { color: var(--pico-del-color); font-weight: 600; }
 .tag { font-size: .75rem; padding: .05rem .35rem; border-radius: .25rem; background: var(--pico-muted-border-color); color: var(--ink); white-space: nowrap; }
-.stats { display: flex; gap: 2rem; flex-wrap: wrap; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .stats div strong { display: block; font: 700 1.9rem/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
 .explanation { border-left: 3px solid var(--pico-primary); }
 /* htmx button in flight: same spinner Pico draws for aria-busy */
@@ -265,6 +265,47 @@ details.more-rows[open] > summary { margin: 0 0 .5rem; color: var(--pico-primary
 details.more-rows[open] > summary .waiver-chevron { color: inherit; transform: rotate(90deg); }
 details.more-rows > summary .waiver-chevron { color: inherit; }
 
+/* Trades: ranked deals lead, the builder is a tap away */
+.trade-views { grid-template-columns: repeat(2, 1fr); margin-top: 0; margin-bottom: 1rem; }
+.deals-title { margin: 0 0 .5rem; font-size: 1.4rem; }
+.deals-filter { display: grid; gap: .2rem; margin-bottom: .5rem; color: var(--pico-muted-color); font-size: .8rem; }
+.deals-filter select { margin: 0; color: var(--ink); font-size: .92rem; }
+.deals-note { margin: 0 0 .75rem; font-size: .8rem; }
+.deals-progress { margin: 1rem 0; color: var(--pico-muted-color); }
+button.deal { display: grid; gap: .4rem; width: 100%; min-height: 44px; margin: 0; padding: .65rem var(--pico-spacing); border: 0; border-radius: 0; background: none; box-shadow: none; color: var(--ink); font-size: .9rem; font-weight: 400; line-height: 1.3; text-align: left; }
+button.deal:is(:hover, :active, :focus) { border: 0; background: none; box-shadow: none; color: var(--ink); }
+button.deal:focus-visible { outline: 2px solid var(--pico-primary); outline-offset: -2px; }
+button.deal + button.deal { border-top: 1px solid var(--pico-muted-border-color); }
+.deal-sides { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); gap: .1rem .25rem; align-items: baseline; }
+.deal strong { color: var(--ink); font-weight: 600; }
+.deal small { font-size: .75rem; }
+.deal-numbers { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .1rem .75rem; }
+.deal-partner { min-width: 0; font-size: .78rem; }
+.deal-gains { margin-left: auto; white-space: nowrap; }
+.deal-you { font: 700 1.3rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.deal-them { margin-left: .25rem; font: 600 1.05rem/1 var(--font-display); font-variant-numeric: tabular-nums; color: var(--ink); }
+.sheet .stats { margin-bottom: .75rem; }
+.sheet article p { margin-bottom: .5rem; font-size: .92rem; }
+.sheet-action { display: flex; align-items: center; min-height: 44px; font-size: .88rem; font-weight: 600; text-decoration: none; }
+.verdict { margin-bottom: 1rem; }
+
+.step-radio { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+/* "label" and ".builder" outrank Pico's [type=radio] ~ label */
+.builder label.step-tab { display: none; }
+.builder-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.builder fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.builder legend { margin-bottom: .35rem; padding: 0; color: var(--pico-muted-color); font: 600 .8rem var(--font-display); letter-spacing: .07em; text-transform: uppercase; }
+label.pick { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) auto; gap: .5rem; align-items: center; width: 100%; min-height: 50px; margin: 0; padding: .4rem var(--pico-spacing); cursor: pointer; }
+label.pick + label.pick { border-top: 1px solid var(--pico-muted-border-color); }
+label.pick input { margin: 0; }
+.pick .row-meta { display: block; }
+.pick .tag { white-space: normal; font-size: .68rem; font-weight: 600; }
+.pick-points { font: 600 1rem var(--font-display); font-variant-numeric: tabular-nums; }
+.pick-off { cursor: not-allowed; }
+.pick-off .row-name, .pick-off .pick-points { color: var(--pico-muted-color); }
+.builder-bar { position: sticky; bottom: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 1rem; padding: .6rem 0; background: var(--paper); font-weight: 500; }
+.builder-bar button { width: auto; min-height: 44px; margin: 0; padding: 0 1.25rem; }
+
 .badge { position: absolute; top: .3rem; left: calc(50% + .4rem); min-width: 1rem; height: 1rem; padding: 0 .25rem; border-radius: .5rem; background: var(--pico-del-color); color: var(--paper); font-size: .68rem; font-weight: 600; line-height: 1rem; text-align: center; }
 
 @media (min-width: 992px) {
@@ -276,6 +317,7 @@ details.more-rows > summary .waiver-chevron { color: inherit; }
 
 @media (min-width: 768px) {
   .phone-only { display: none !important; }
+  .trade-views, .deals-filter { max-width: 24rem; }
 }
 
 /* Bottom tab bar: phones only */
@@ -293,6 +335,18 @@ details.more-rows > summary .waiver-chevron { color: inherit; }
   .startsit .rows { padding-inline: 0; }
   .edge-to-edge { margin-inline: calc(-1 * var(--pico-spacing)); }
   .startsit .row { padding-inline: var(--pico-spacing); }
+
+  /* one side of the trade at a time, with the action in thumb reach */
+  .builder { display: grid; grid-template-columns: repeat(2, 1fr); }
+  .builder-form { grid-column: 1 / -1; }
+  .builder label.step-tab { display: flex; align-items: center; justify-content: center; min-height: 44px; margin: 0 0 .75rem; border: 1px solid var(--pico-muted-border-color); background: var(--pico-card-background-color); color: var(--pico-muted-color); font-size: .88rem; font-weight: 500; cursor: pointer; }
+  .step-radio:checked + .step-tab { border-color: var(--ink); background: var(--ink); color: var(--paper); font-weight: 600; }
+  .step-radio:focus-visible + .step-tab { outline: 2px solid var(--pico-primary); outline-offset: 2px; }
+  .builder-sides { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .builder legend { display: none; }
+  .builder:has(#step-give:checked) .step-get, .builder:has(#step-get:checked) .step-give { display: none; }
+  .builder-bar { bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom)); margin-inline: calc(-1 * var(--pico-spacing)); padding-inline: var(--pico-spacing); border-top: 1px solid var(--pico-muted-border-color); background: var(--pico-card-background-color); }
+  .deals-progress { margin-inline: 0; }
 
   /* the sheet rises from the bottom edge */
   .sheet { align-items: flex-end; }
@@ -328,34 +382,4 @@ details.more-rows > summary .waiver-chevron { color: inherit; }
     min-height: 44px;
   }
   .tabbar a[aria-current="page"] { color: var(--pico-primary); font-weight: 600; }
-
-  /* tables become stacked cards; cells label themselves via data-label */
-  table.cards thead { display: none; }
-  table.cards, table.cards tbody, table.cards td { display: block; width: 100%; }
-  table.cards tr {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: .75rem;
-    padding: .5rem .75rem;
-    border: 1px solid var(--pico-muted-border-color);
-    border-radius: var(--pico-border-radius);
-  }
-  table.cards td {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: .2rem 0;
-    border: none;
-    text-align: right;
-    background: none !important;
-  }
-  table.cards td[data-label]::before {
-    content: attr(data-label);
-    color: var(--pico-muted-color);
-    text-align: left;
-  }
-  table.cards td.card-title { display: block; order: -1; text-align: left; font-weight: 600; padding-bottom: .35rem; }
-
-  /* trade builder: one column of comfortable checkboxes */
-  fieldset label { padding: .4rem 0; }
 }

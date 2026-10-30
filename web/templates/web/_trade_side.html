@@ -1,2 +1,0 @@
-{% load waiverwise %}
-<td data-label="{{ label }}"><span>{% for r in rows %}{{ r.player.name }} <span class="muted">{{ r.player.position }} · {{ r.ros_points|pts }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</span></td>

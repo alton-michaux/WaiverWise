@@ -6,7 +6,8 @@ from django.views.decorators.cache import cache_control
 from django.shortcuts import get_object_or_404, redirect, render
 
 from analysis.startsit import MODES
-from web import narrate, services
+from nfl.consensus import remaining_weeks
+from web import deals, narrate, services
 
 
 def home(request):
@@ -81,9 +82,6 @@ def waivers(request):
     return _page(request, "web/waivers.html", context)
 
 
-FINDER_LIMIT = 5
-
-
 def _trade_context(request) -> dict:
     league = services.current_league()
     team = _team(request, league)
@@ -114,26 +112,24 @@ def _trade_context(request) -> dict:
 
 
 def trades(request):
-    return _page(request, "web/trades.html", _trade_context(request))
-
-
-def trade_finder(request):
-    """HTMX partial: best mutually beneficial trades with one partner."""
+    # a verdict or an edit of one means the builder; otherwise lead with the best deals
+    if request.GET.get("view") == "build" or "give" in request.GET or "get" in request.GET:
+        return _page(request, "web/trades.html", {**_trade_context(request), "view": "build"})
     league = services.current_league()
     team = _team(request, league)
-    partner = get_object_or_404(league.teams, espn_id=request.GET.get("partner"))
-    ctx = services.TradeContext(league)
-    found = ctx.find(team, partner)
-    return render(
-        request,
-        "web/_trade_finder.html",
-        {
-            "team": team,
-            "partner": partner,
-            "trades": [services.describe(ctx, t) for t in found[:FINDER_LIMIT]],
-            "total": len(found),
-        },
-    )
+    context = {"league": league, "team": team, "weeks": remaining_weeks(league), "view": "best"}
+    # already searched (the sync does this for your team): show it now rather than after another request
+    stored = deals.best_deals(team, search=False)
+    return _page(request, "web/trades.html", {**context, "best": stored if stored["done"] else None})
+
+
+def best_deals(request):
+    """HTMX partial: ranked deals, with progress while a slow server works through the league."""
+    league = services.current_league()
+    team = _team(request, league)
+    partner_id = request.GET.get("partner")
+    partner = get_object_or_404(league.teams.exclude(pk=team.pk), espn_id=partner_id) if partner_id else None
+    return render(request, "web/_best_deals.html", {"best": deals.best_deals(team, partner)})
 
 
 def _startsit_payload(request):

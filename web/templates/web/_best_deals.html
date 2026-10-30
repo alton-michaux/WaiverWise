@@ -1,0 +1,58 @@
+{% load waiverwise %}
+<div id="best-deals"{% if not best.done %} hx-get="{% url 'best_deals' %}?team={{ best.team.espn_id }}" hx-trigger="load delay:200ms" hx-swap="outerHTML"{% endif %}>
+  {% if best.done %}
+    <h3 class="deals-title">
+      {% if best.partner_filter %}{{ best.total }} deal{{ best.total|pluralize }} with {{ best.partner_filter.name }}
+      {% else %}{{ best.total }} deal{{ best.total|pluralize }} where both teams gain{% endif %}
+    </h3>
+    <label class="deals-filter" for="deals-partner">Deals with
+      <select id="deals-partner" name="partner" hx-get="{% url 'best_deals' %}?team={{ best.team.espn_id }}" hx-target="#best-deals" hx-swap="outerHTML">
+        <option value="">Any team</option>
+        {% for p in best.partners %}<option value="{{ p.espn_id }}" {% if p.pk == best.partner_filter.pk %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <p class="muted deals-note">Ranked by your rest-of-season gain. Tap a deal for the verdict.</p>
+  {% else %}
+    <p class="deals-progress" aria-busy="true">Checked {{ best.checked }} of {{ best.of }} teams…</p>
+  {% endif %}
+
+  {% if best.deals %}
+    <div class="rows edge-to-edge deals">
+      {% for deal in best.deals %}
+        <button type="button" class="deal" data-open-dialog="deal-{{ forloop.counter }}" aria-haspopup="dialog">
+          <span class="deal-sides">
+            <span class="swap-label move-in">Get</span>
+            <span>{% for p in deal.gets %}<strong>{{ p.name }}</strong> <small class="muted">{{ p.position }}</small>{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+            <span class="swap-label move-out">Give</span>
+            <span>{% for p in deal.gives %}<strong>{{ p.name }}</strong> <small class="muted">{{ p.position }}</small>{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+          </span>
+          <span class="deal-numbers">
+            <span class="muted deal-partner">{{ deal.partner.name }}</span>
+            <span class="deal-gains"><span class="deal-you move-in">{{ deal.you|signed }}</span> <small class="muted">you</small> <span class="deal-them">{{ deal.them|signed }}</span> <small class="muted">them</small></span>
+          </span>
+        </button>
+      {% endfor %}
+    </div>
+    {% for deal in best.deals %}
+      <dialog id="deal-{{ forloop.counter }}" class="sheet" aria-label="Trade verdict">
+        <article>
+          <h3>{% for p in deal.gives %}{{ p.name }}{% if not forloop.last %} and {% endif %}{% endfor %} for {% for p in deal.gets %}{{ p.name }}{% if not forloop.last %} and {% endif %}{% endfor %}</h3>
+          <div class="stats">
+            <div><span class="muted">{{ best.team.name }}</span><strong class="move-in">{{ deal.you|signed }}</strong><span class="muted">{{ deal.you_before|pts }} → {{ deal.you_after|pts }}</span></div>
+            <div><span class="muted">{{ deal.partner.name }}</span><strong class="move-in">{{ deal.them|signed }}</strong><span class="muted">{{ deal.them_before|pts }} → {{ deal.them_after|pts }}</span></div>
+          </div>
+          <p>Both teams improve: a realistic offer.</p>
+          {% if deal.you_drop %}<p class="muted">You'd need to drop: {% for p in deal.you_drop %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+          {% if deal.them_drop %}<p class="muted">They'd need to drop: {% for p in deal.them_drop %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+          {% include "web/_explain_button.html" with kind="trade" suffix=forloop.counter query=deal.query label="Why this trade?" button_class="link-button" %}
+          <a class="sheet-action" href="{% url 'trades' %}?view=build&amp;{{ deal.query }}">Adjust in the builder</a>
+          <button type="button" class="secondary outline" data-close-dialog>Close</button>
+        </article>
+      </dialog>
+    {% endfor %}
+  {% elif best.done %}
+    <p class="muted no-gains">{% if best.partner_filter %}No deals with this team where both sides gain.{% else %}No deals where both teams gain right now.{% endif %}</p>
+  {% endif %}
+
+  {% if best.done %}<p class="muted fine-print">Up to 2-for-1 packages from each roster's top 8 non-K/DST players, skipping anyone in an accepted trade or pending waiver claim, where both teams' rest-of-season lineups gain at least 1 point.{% if not best.partner_filter %} Shows at most two deals for the same target; pick a team to see more.{% endif %}</p>{% endif %}
+</div>

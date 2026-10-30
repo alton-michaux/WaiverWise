@@ -2,70 +2,23 @@
 {% load waiverwise %}
 {% block title %}Trades{% endblock %}
 {% block content %}
-<hgroup>
+<hgroup class="page-intro">
   <h2>Trades</h2>
-  <p>Rest-of-season lineup impact, weeks {{ weeks.start }}–{{ weeks.stop|add:"-1" }}</p>
+  <p>Rest-of-season lineup impact, weeks {{ weeks.start }} to {{ weeks.stop|add:"-1" }}.</p>
 </hgroup>
 
-<form method="get">
-  <input type="hidden" name="team" value="{{ team.espn_id }}">
-  <label>Trade partner
-    <select name="partner" onchange="this.form.requestSubmit()">
-      {% for t in others %}<option value="{{ t.espn_id }}" {% if t.pk == partner.pk %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
-    </select>
-  </label>
-</form>
+<nav class="segments trade-views" aria-label="Trade view">
+  <a href="?view=best" {% if view == "best" %}aria-current="true"{% endif %}>Best deals</a>
+  <a href="?view=build" {% if view == "build" %}aria-current="true"{% endif %}>Build a trade</a>
+</nav>
 
-{% if result %}
-  {% with t=result.trade %}
-  <article>
-    <header><strong>Verdict</strong></header>
-    <div class="stats">
-      <div><span class="muted">{{ team.name }}</span><strong class="{% if t.a.gain > 0 %}move-in{% elif t.a.gain < 0 %}move-out{% endif %}">{{ t.a.gain|signed }}</strong><span class="muted">{{ t.a.before|pts }} → {{ t.a.after|pts }}</span></div>
-      <div><span class="muted">{{ partner.name }}</span><strong class="{% if t.b.gain > 0 %}move-in{% elif t.b.gain < 0 %}move-out{% endif %}">{{ t.b.gain|signed }}</strong><span class="muted">{{ t.b.before|pts }} → {{ t.b.after|pts }}</span></div>
-    </div>
-    <p>
-      {% if t.a.gain > 0 and t.b.gain > 0 %}Both teams improve: a realistic offer.
-      {% elif t.a.gain > 0 %}Good for you, but it makes {{ partner.name }} worse, so expect pushback.
-      {% elif t.b.gain > 0 %}This helps {{ partner.name }} more than you. Pass.
-      {% else %}Neither lineup improves.{% endif %}
-    </p>
-    {% if result.a_dropped %}<p class="muted">You'd need to drop: {% for r in result.a_dropped %}{{ r.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
-    {% if result.b_dropped %}<p class="muted">They'd need to drop: {% for r in result.b_dropped %}{{ r.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
-  </article>
-  {% include "web/_explain_button.html" with kind="trade" %}
-  {% endwith %}
+{% if view == "build" %}
+  {% include "web/_trade_builder.html" %}
+{% elif best %}
+  {% include "web/_best_deals.html" %}
+{% else %}
+  <div id="best-deals" hx-get="{% url 'best_deals' %}?team={{ team.espn_id }}" hx-trigger="load" hx-swap="outerHTML">
+    <p class="deals-progress" aria-busy="true">Finding deals across the league…</p>
+  </div>
 {% endif %}
-
-<form method="get">
-  <input type="hidden" name="team" value="{{ team.espn_id }}">
-  <input type="hidden" name="partner" value="{{ partner.espn_id }}">
-  <div class="grid">
-    <fieldset>
-      <legend><strong>You give</strong></legend>
-      {% for r in my_roster %}
-        <label><input type="checkbox" name="give" value="{{ r.player.pk }}" {% if r.player.pk in give %}checked{% endif %} {% if r.pending %}disabled{% endif %}>
-          {{ r.player.name }} <span class="muted">{{ r.player.position }} · ROS {{ r.ros_points|pts }}</span>
-          {% if r.pending %}<span class="tag">{{ r.pending }}</span>{% endif %}</label>
-      {% endfor %}
-    </fieldset>
-    <fieldset>
-      <legend><strong>You get</strong></legend>
-      {% for r in their_roster %}
-        <label><input type="checkbox" name="get" value="{{ r.player.pk }}" {% if r.player.pk in get %}checked{% endif %} {% if r.pending %}disabled{% endif %}>
-          {{ r.player.name }} <span class="muted">{{ r.player.position }} · ROS {{ r.ros_points|pts }}</span>
-          {% if r.pending %}<span class="tag">{{ r.pending }}</span>{% endif %}</label>
-      {% endfor %}
-    </fieldset>
-  </div>
-  <button type="submit">Evaluate trade</button>
-</form>
-
-<h3>Trade finder</h3>
-<p class="muted">Up to 2-for-1 packages from each roster's top 8 non-K/DST players (skipping anyone in an accepted trade or pending waiver claim) where both teams' rest-of-season lineups gain at least 1 point. Loads one team at a time.</p>
-{% for t in others %}
-  <div hx-get="{% url 'trade_finder' %}?team={{ team.espn_id }}&partner={{ t.espn_id }}" hx-trigger="load" hx-swap="outerHTML">
-    <p aria-busy="true">{{ t.name }}…</p>
-  </div>
-{% endfor %}
 {% endblock %}

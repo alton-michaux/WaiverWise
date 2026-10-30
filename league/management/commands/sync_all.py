@@ -62,6 +62,11 @@ class Command(BaseCommand):
                 continue
             SyncRun.objects.create(step=name, ok=True)
             self.stdout.write(f"[{name}] done in {time.monotonic() - started:.1f}s")
+        try:
+            call_command("refresh_best_deals", stdout=self.stdout, stderr=self.stderr)
+        except Exception:
+            # the Trades tab searches on demand when this is missing, so it isn't worth failing the sync
+            log.exception("refreshing best deals failed")
         stale = SyncRun.objects.values_list("pk", flat=True)[KEEP_RUNS:]
         SyncRun.objects.filter(pk__in=list(stale)).delete()
         if failed:
