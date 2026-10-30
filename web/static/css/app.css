@@ -11,7 +11,37 @@ table td, table th { padding: .35rem .5rem; font-size: .9rem; }
 .stats { display: flex; gap: 2rem; flex-wrap: wrap; }
 .stats div strong { display: block; font-size: 1.5rem; }
 .explanation { border-left: 3px solid var(--pico-primary); }
-button.htmx-request::after { content: " …"; }
+/* htmx button in flight: same spinner Pico draws for aria-busy */
+button.htmx-request::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-inline-end: calc(var(--pico-spacing) * .5);
+  background: var(--pico-icon-loading) center / 1em auto no-repeat;
+  vertical-align: -.125em;
+}
+.when-busy, button.htmx-request .when-idle { display: none; }
+button.htmx-request .when-busy { display: inline; }
+/* full page load in flight (set from base.html): sliding bar up top, dimmed content */
+html.navigating body::before {
+  content: "";
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: 20;
+  width: 40%;
+  height: 3px;
+  background: var(--pico-primary);
+  animation: page-loading 1.2s ease-in-out infinite;
+}
+html.navigating main { opacity: .5; transition: opacity .15s; }
+@keyframes page-loading {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.navigating body::before { width: 100%; animation: none !important; }
+}
 .banner { padding: .75rem 1rem; border-radius: var(--pico-border-radius); background: var(--pico-del-color); color: #fff; margin-bottom: 1rem; }
 .login { max-width: 24rem; margin: 2rem auto; }
 .brand { text-decoration: none; }

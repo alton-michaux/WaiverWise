@@ -53,6 +53,35 @@
   {% endif %}
   <script>
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("{% url 'service_worker' %}");
+
+    // page loads can take a while (simulations, cold starts) and an installed PWA has no browser spinner
+    const root = document.documentElement;
+    let busyEl = null;
+    const startLoading = (el) => {
+      root.classList.add("navigating");
+      busyEl = el;
+      busyEl?.setAttribute("aria-busy", "true");
+    };
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest?.("a[href]");
+      if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (a.target || a.hasAttribute("download") || a.origin !== location.origin) return;
+      if (a.hash && a.pathname === location.pathname && a.search === location.search) return;
+      startLoading(a);
+    });
+    document.addEventListener("submit", (e) => { if (!e.defaultPrevented) startLoading(e.submitter); });
+    // the back button can restore this page from memory with the indicators still on
+    window.addEventListener("pageshow", () => {
+      root.classList.remove("navigating");
+      busyEl?.removeAttribute("aria-busy");
+      busyEl = null;
+    });
+
+    // htmx doesn't swap failed responses, which would leave a spinner up forever
+    document.addEventListener("htmx:afterRequest", (e) => {
+      if (e.detail.successful || root.classList.contains("navigating")) return;  // leaving the page aborts requests
+      e.detail.target.innerHTML = '<p class="move-out">Couldn\'t load this. Reload the page to try again.</p>';
+    });
   </script>
 </body>
 </html>

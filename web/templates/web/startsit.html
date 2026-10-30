@@ -8,10 +8,10 @@
 </hgroup>
 
 <form method="get" class="grid">
-  <select name="team" onchange="this.form.submit()" aria-label="Team">
+  <select name="team" onchange="this.form.requestSubmit()" aria-label="Team">
     {% for t in teams %}<option value="{{ t.espn_id }}" {% if t.pk == team.pk %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
   </select>
-  <select name="mode" onchange="this.form.submit()" aria-label="Optimize for">
+  <select name="mode" onchange="this.form.requestSubmit()" aria-label="Optimize for">
     {% for m in modes %}<option value="{{ m }}" {% if m == mode %}selected{% endif %}>Optimize for {{ m }}</option>{% endfor %}
   </select>
 </form>
