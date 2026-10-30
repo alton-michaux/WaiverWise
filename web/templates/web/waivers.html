@@ -3,14 +3,11 @@
 {% block title %}Waivers · Week {{ week }}{% endblock %}
 {% block content %}
 <hgroup>
-  <h2>Waiver targets · {{ team.name }}</h2>
+  <h2>Waiver targets</h2>
   <p>Weeks {{ weeks.start }}–{{ weeks.stop|add:"-1" }}</p>
 </hgroup>
 
-<form method="get" class="grid">
-  <select name="team" onchange="this.form.requestSubmit()" aria-label="Team">
-    {% for t in teams %}<option value="{{ t.espn_id }}" {% if t.pk == team.pk %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
-  </select>
+<form method="get">
   <select name="position" onchange="this.form.requestSubmit()" aria-label="Position">
     <option value="">All positions</option>
     {% for p in positions %}<option value="{{ p }}" {% if p == position %}selected{% endif %}>{{ p }}</option>{% endfor %}

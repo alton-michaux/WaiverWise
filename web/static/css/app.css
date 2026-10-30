@@ -1,6 +1,51 @@
 :root {
   --tabbar-height: 3.5rem;
+
+  /* scoreboard band: the same in both themes */
+  --band: #0b2a42;
+  --band-fg: #fff;
+  --band-muted: #a9c3d6;
+  --band-gold: #ffd166;
+
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pico-font-family-sans-serif: var(--font-body);
+  --pico-border-radius: .375rem;
 }
+/* same specificity as Pico's theme blocks, so these win by loading later */
+:root:not([data-theme]) {
+  --ink: #12263a;  /* Pico redefines --pico-color inside links and buttons */
+  --pico-background-color: #f3f6f8;
+  --pico-color: var(--ink);
+  --pico-h1-color: var(--ink);
+  --pico-h2-color: var(--ink);
+  --pico-h3-color: var(--ink);
+  --pico-h4-color: var(--ink);
+  --pico-muted-color: #566878;
+  --pico-muted-border-color: #d7e0e7;
+  --pico-card-background-color: #fff;
+  --pico-ins-color: #0c7449;
+  --pico-del-color: #b0352a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --ink: #e7eef4;
+    --pico-background-color: #0d1720;
+    --pico-muted-color: #9aabb9;
+    --pico-muted-border-color: #2b3b49;
+    --pico-card-background-color: #16232f;
+    --pico-ins-color: #52c992;
+    --pico-del-color: #f28a80;
+  }
+}
+
+@font-face { font-family: "Barlow"; font-weight: 400; font-display: swap; src: url("../vendor/fonts/barlow-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 500; font-display: swap; src: url("../vendor/fonts/barlow-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 600; font-display: swap; src: url("../vendor/fonts/barlow-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url("../vendor/fonts/barlow-condensed-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; font-display: swap; src: url("../vendor/fonts/barlow-condensed-latin-700-normal.woff2") format("woff2"); }
+
+h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; }
 
 table td, table th { padding: .35rem .5rem; font-size: .9rem; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -9,7 +54,7 @@ table td, table th { padding: .35rem .5rem; font-size: .9rem; }
 .move-out { color: var(--pico-del-color); font-weight: 600; }
 .tag { font-size: .75rem; padding: .05rem .35rem; border-radius: .25rem; background: var(--pico-muted-border-color); white-space: nowrap; }
 .stats { display: flex; gap: 2rem; flex-wrap: wrap; }
-.stats div strong { display: block; font-size: 1.5rem; }
+.stats div strong { display: block; font: 700 1.9rem/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
 .explanation { border-left: 3px solid var(--pico-primary); }
 /* htmx button in flight: same spinner Pico draws for aria-busy */
 button.htmx-request::before {
@@ -31,7 +76,7 @@ html.navigating body::before {
   z-index: 20;
   width: 40%;
   height: 3px;
-  background: var(--pico-primary);
+  background: var(--band-gold);
   animation: page-loading 1.2s ease-in-out infinite;
 }
 html.navigating main { opacity: .5; transition: opacity .15s; }
@@ -45,8 +90,70 @@ html.navigating main { opacity: .5; transition: opacity .15s; }
 .banner { padding: .75rem 1rem; border-radius: var(--pico-border-radius); background: var(--pico-del-color); color: #fff; margin-bottom: 1rem; }
 .saved-copy { padding: .5rem .75rem; border-radius: var(--pico-border-radius); background: var(--pico-muted-border-color); font-size: .85rem; margin-bottom: 1rem; }
 .login { max-width: 24rem; margin: 2rem auto; }
-.brand { text-decoration: none; }
-.signout { padding: .25rem .6rem; font-size: .8rem; margin: 0; white-space: nowrap; }
+
+/* App bar: the one place the scoreboard navy appears */
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  padding-block: env(safe-area-inset-top) 0;
+  background: var(--band);
+  color: var(--band-fg);
+}
+.appbar-inner { display: flex; align-items: center; gap: 1rem; min-height: 3rem; padding-block: .25rem; }
+.brand { color: var(--band-fg); font: 700 1.3rem var(--font-display); text-decoration: none; }
+.brand:hover { color: var(--band-fg); }
+.team-button {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--band-fg);
+  font: 600 1.1rem var(--font-display);
+  width: auto;
+}
+.team-button:is(:hover, :active, :focus) { border: 0; background: none; color: var(--band-fg); }
+.team-button:focus-visible { outline: 2px solid var(--band-gold); outline-offset: 2px; box-shadow: none; }
+.team-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-button svg { flex: none; }
+.sync-age { flex: none; margin-left: auto; color: var(--band-muted); font-size: .78rem; white-space: nowrap; }
+.appbar-links { display: flex; gap: 1.25rem; margin-left: 1rem; }
+.appbar-links a { color: var(--band-muted); text-decoration: none; font-weight: 500; }
+.appbar-links a:hover, .appbar-links a[aria-current="page"] { color: var(--band-fg); }
+.appbar-links a[aria-current="page"] { font-weight: 600; box-shadow: 0 2px 0 var(--band-gold); }
+
+/* Team and account sheet: slides from the bottom on phones, centered on desktop */
+.sheet article { width: 100%; max-width: 26rem; margin: 0; overscroll-behavior: contain; }
+.sheet h3 { margin-bottom: .5rem; }
+.sheet-list { margin: 0 0 1rem; padding: 0; list-style: none; }
+.sheet-list li { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--pico-muted-border-color); }
+.sheet-list a, .sheet-list button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+.sheet-list form { margin: 0; }
+.sheet-list a[aria-current="true"] { font-weight: 600; color: var(--pico-primary); }
+.sheet-list small { flex: none; color: var(--pico-muted-color); }
+.sheet [data-close-dialog] { width: 100%; margin: 0; }
 
 /* Bottom tab bar: phones only */
 .tabbar { display: none; }
@@ -54,11 +161,17 @@ html.navigating main { opacity: .5; transition: opacity .15s; }
 @media (max-width: 767px) {
   /* app-like chrome */
   body { padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom)); }
-  header.container { padding-top: env(safe-area-inset-top); }
   .desktop-only { display: none !important; }
   h2 { font-size: 1.4rem; }
-  header nav li { padding-top: .5rem; padding-bottom: .5rem; }
-  .sync-age { font-size: .7rem; line-height: 1.1; display: block; }
+
+  /* the sheet rises from the bottom edge */
+  .sheet { align-items: flex-end; }
+  .sheet article {
+    max-width: none;
+    max-height: 86vh;
+    padding-bottom: calc(var(--pico-block-spacing-vertical) + env(safe-area-inset-bottom));
+    border-radius: .875rem .875rem 0 0;
+  }
 
   .tabbar {
     display: flex;
@@ -67,16 +180,19 @@ html.navigating main { opacity: .5; transition: opacity .15s; }
     z-index: 10;
     height: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
-    background: var(--pico-background-color);
+    background: var(--pico-card-background-color);
     border-top: 1px solid var(--pico-muted-border-color);
   }
   .tabbar a {
     flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: .1rem;
     text-decoration: none;
-    font-size: .85rem;
+    font-size: .75rem;
+    font-weight: 500;
     color: var(--pico-muted-color);
     min-height: 44px;
   }
