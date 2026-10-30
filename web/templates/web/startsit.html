@@ -3,14 +3,11 @@
 {% block title %}Start/Sit · Week {{ week }}{% endblock %}
 {% block content %}
 <hgroup>
-  <h2>{{ team.name }} · Week {{ week }}</h2>
+  <h2>Week {{ week }}</h2>
   <p>{% if opponent %}vs {{ opponent.name }}{% else %}No matchup this week{% endif %}</p>
 </hgroup>
 
-<form method="get" class="grid">
-  <select name="team" onchange="this.form.requestSubmit()" aria-label="Team">
-    {% for t in teams %}<option value="{{ t.espn_id }}" {% if t.pk == team.pk %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
-  </select>
+<form method="get">
   <select name="mode" onchange="this.form.requestSubmit()" aria-label="Optimize for">
     {% for m in modes %}<option value="{{ m }}" {% if m == mode %}selected{% endif %}>Optimize for {{ m }}</option>{% endfor %}
   </select>

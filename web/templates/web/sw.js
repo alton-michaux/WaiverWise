@@ -8,6 +8,11 @@ const PRECACHE = [
   "{% static 'css/app.css' %}",
   "{% static 'vendor/htmx-2.0.3.min.js' %}",
   "{% static 'icons/icon-192.png' %}",
+  "{% static 'vendor/fonts/barlow-latin-400-normal.woff2' %}",
+  "{% static 'vendor/fonts/barlow-latin-500-normal.woff2' %}",
+  "{% static 'vendor/fonts/barlow-latin-600-normal.woff2' %}",
+  "{% static 'vendor/fonts/barlow-condensed-latin-600-normal.woff2' %}",
+  "{% static 'vendor/fonts/barlow-condensed-latin-700-normal.woff2' %}",
 ];
 const SLOW_NETWORK_MS = 4000;
 // pages worth keeping a last-seen copy of for offline reading

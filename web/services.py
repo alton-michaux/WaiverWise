@@ -40,6 +40,15 @@ def my_team(league: League) -> Team:
     return league.teams.get(espn_id=settings.ESPN_MY_TEAM_ID)
 
 
+TEAM_COOKIE = "team"
+
+
+def remembered_team(request, league: League) -> Team | None:
+    """The team picked on this page or an earlier one, if it still exists."""
+    team_id = request.GET.get("team") or request.COOKIES.get(TEAM_COOKIE, "")
+    return league.teams.filter(espn_id=team_id).first() if team_id.isdigit() else None
+
+
 def tied_up(league: League) -> dict[int, str]:
     """Player pk -> label for players in an accepted trade or pending waiver claim."""
     teams = dict(league.teams.values_list("espn_id", "name"))

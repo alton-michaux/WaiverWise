@@ -15,7 +15,30 @@ def home(request):
 
 def _team(request, league):
     team_id = request.GET.get("team")
-    return get_object_or_404(league.teams, espn_id=team_id) if team_id else services.my_team(league)
+    if team_id:
+        if not team_id.isdigit():
+            raise Http404
+        return get_object_or_404(league.teams, espn_id=team_id)
+    return services.remembered_team(request, league) or services.my_team(league)
+
+
+def _page(request, template, context):
+    """Render a full page, remembering a team picked with ?team= for the other tabs.
+
+    A cookie, not the session: SESSION_SAVE_EVERY_REQUEST means a trade finder request
+    still running when you switch teams would save its older session over the new choice.
+    """
+    response = render(request, template, context)
+    if "team" in request.GET:
+        response.set_cookie(
+            services.TEAM_COOKIE,
+            context["team"].espn_id,
+            max_age=settings.SESSION_COOKIE_AGE,
+            secure=settings.SESSION_COOKIE_SECURE,
+            httponly=True,
+            samesite="Lax",
+        )
+    return response
 
 
 def startsit(request):
@@ -25,9 +48,8 @@ def startsit(request):
     if mode not in MODES:
         mode = "mean"
     context = services.start_sit(team, mode)
-    context["teams"] = league.teams.order_by("name")
     context["modes"] = MODES
-    return render(request, "web/startsit.html", context)
+    return _page(request, "web/startsit.html", context)
 
 
 WAIVER_POSITIONS = ["QB", "RB", "WR", "TE", "K", "D/ST"]
@@ -40,9 +62,8 @@ def waivers(request):
     if position not in WAIVER_POSITIONS:
         position = None
     context = services.waivers(team, position)
-    context["teams"] = league.teams.order_by("name")
     context["positions"] = WAIVER_POSITIONS
-    return render(request, "web/waivers.html", context)
+    return _page(request, "web/waivers.html", context)
 
 
 FINDER_LIMIT = 5
@@ -67,7 +88,6 @@ def _trade_context(request) -> dict:
         "league": league,
         "team": team,
         "partner": partner,
-        "teams": league.teams.order_by("name"),
         "others": others,
         "my_roster": services.roster_choices(ctx, team),
         "their_roster": services.roster_choices(ctx, partner),
@@ -79,7 +99,7 @@ def _trade_context(request) -> dict:
 
 
 def trades(request):
-    return render(request, "web/trades.html", _trade_context(request))
+    return _page(request, "web/trades.html", _trade_context(request))
 
 
 def trade_finder(request):
@@ -158,7 +178,7 @@ def manifest(request):
             "scope": "/",
             "display": "standalone",
             "background_color": "#ffffff",
-            "theme_color": "#0172ad",
+            "theme_color": "#0b2a42",
             "icons": [
                 icon("icon-192.png", "192x192"),
                 icon("icon-512.png", "512x512"),
