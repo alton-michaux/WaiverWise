@@ -70,9 +70,9 @@ def test_bad_team_param_is_not_found(signed_in, value):
     assert TEAM_COOKIE not in resp.cookies
 
 
-def test_finder_requests_do_not_change_the_choice(signed_in):
+def test_deal_requests_do_not_change_the_choice(signed_in):
     # one still running when you switch teams must not switch you back
-    resp = signed_in.get("/trades/find/", {"team": 2, "partner": 1})
+    resp = signed_in.get("/trades/best/", {"team": 2})
     assert resp.status_code == 200
     assert TEAM_COOKIE not in resp.cookies
 
