@@ -182,6 +182,7 @@ def move_count(team: Team) -> int:
 
 
 TREND_POSITIONS = {"QB", "RB", "WR", "TE"}
+SMALLEST_GAIN = 0.05  # anything less displays as +0.0
 
 
 @dataclass
@@ -195,6 +196,14 @@ class WaiverRow:
     trend: Trend | None
     drop: Player | None = None
     pending: str = ""
+
+    @property
+    def helps_this_week(self) -> bool:
+        return self.next_week_gain >= SMALLEST_GAIN
+
+    @property
+    def helps(self) -> bool:
+        return self.ros_gain >= SMALLEST_GAIN or self.helps_this_week
 
 
 def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
@@ -255,13 +264,16 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
         )
     # most targets gain nothing; fall back to league-wide value so the list stays useful
     rows.sort(key=lambda r: (r.ros_gain, r.next_week_gain, r.vorp), reverse=True)
+    rows = rows[:limit]
     return {
         "league": league,
         "team": team,
         "week": weeks[0],
         "weeks": weeks,
         "position": position,
-        "rows": rows[:limit],
+        "rows": rows,
+        "helpful_rows": [r for r in rows if r.helps],
+        "other_rows": [r for r in rows if not r.helps],
         "drop": by_id.get(report.drop_id),
         "drop_cost": report.drop_cost,
     }

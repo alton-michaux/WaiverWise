@@ -2,64 +2,48 @@
 {% load waiverwise %}
 {% block title %}Waivers · Week {{ week }}{% endblock %}
 {% block content %}
-<hgroup>
-  <h2>Waiver targets</h2>
-  <p>Weeks {{ weeks.start }}–{{ weeks.stop|add:"-1" }}</p>
+<hgroup class="page-intro">
+  <h2>Pickups that help you</h2>
+  <p>
+    Rest-of-season lineup points gained, weeks {{ weeks.start }} to {{ weeks.stop|add:"-1" }}.
+    {% if not drop %}You have an open roster spot, so gains assume no drop.
+    {% elif drop_cost < 0.05 %}Safe to drop: {{ drop.name }}.
+    {% else %}Cheapest drop: {{ drop.name }}, costing {{ drop_cost|pts }} points.{% endif %}
+  </p>
 </hgroup>
 
-<form method="get">
-  <select name="position" onchange="this.form.requestSubmit()" aria-label="Position">
-    <option value="">All positions</option>
-    {% for p in positions %}<option value="{{ p }}" {% if p == position %}selected{% endif %}>{{ p }}</option>{% endfor %}
-  </select>
-</form>
+<nav class="chips" aria-label="Position">
+  <a href="{{ request.path }}" {% if not position %}aria-current="true"{% endif %}>All</a>
+  {% for p in positions %}<a href="?position={{ p|urlencode }}" {% if p == position %}aria-current="true"{% endif %}>{{ p }}</a>{% endfor %}
+</nav>
 
-<article>
-  {% if drop %}
-    Your most expendable player is <strong>{{ drop.name }}</strong> <span class="muted">({{ drop.position }} · {{ drop.pro_team }})</span>:
-    losing him costs {{ drop_cost|pts }} rest-of-season lineup points. Each target below shows the best drop for that specific add.
-  {% else %}
-    You have an open roster spot, so gains assume no drop.
-  {% endif %}
-</article>
-{% include "web/_explain_button.html" with kind="waivers" %}
+{% include "web/_explain_button.html" with kind="waivers" label="Why these pickups?" button_class="link-button" %}
 
-<div class="overflow-auto">
-<table class="striped cards">
-  <thead>
-    <tr>
-      <th>Player</th><th class="num">Own%</th><th class="num">Wk {{ week }}</th><th class="num">ROS</th><th class="num">VORP</th>
-      <th class="num" title="Your lineup points gained this week">Wk gain</th>
-      <th class="num" title="Your lineup points gained rest of season, net of the drop">ROS gain</th>
-      <th title="Best player to drop for this add">Drop</th>
-      <th class="num" title="Targets + carries per game, last 3 games (change vs earlier)">Opp/g</th>
-      <th class="num" title="Offensive snap %, last 3 games (change vs earlier)">Snap%</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for r in rows %}
-      <tr>
-        <td class="card-title">
-          {{ r.player.name }} <span class="muted">{{ r.player.position }} · {{ r.player.pro_team }}</span>
-          {% if r.player.injury_status and r.player.injury_status != "ACTIVE" %}<span class="tag">{{ r.player.injury_status|title }}</span>{% endif %}
-          {% if r.pending %}<span class="tag">{{ r.pending }}</span>{% endif %}
-          {% if r.player.fa_status == "WAIVERS" %}<span class="tag" title="Claim before waivers clear">Waivers · clears {{ r.player.waiver_clears|date:"D g:ia" }}</span>{% endif %}
-        </td>
-        <td class="num" data-label="ESPN own%">{{ r.player.percent_owned|floatformat:0 }}</td>
-        <td class="num" data-label="Wk {{ week }} proj">{% if r.week_proj %}{{ r.week_proj.mean|pts }}{% else %}<span class="muted">bye</span>{% endif %}</td>
-        <td class="num" data-label="ROS points">{{ r.ros_points|pts }}</td>
-        <td class="num" data-label="VORP">{{ r.vorp|signed }}</td>
-        <td data-label="Wk gain" class="num {% if r.next_week_gain > 0 %}move-in{% endif %}">{{ r.next_week_gain|signed }}</td>
-        <td data-label="ROS gain" class="num {% if r.ros_gain > 0 %}move-in{% elif r.ros_gain < 0 %}move-out{% endif %}">{{ r.ros_gain|signed }}</td>
-        <td data-label="Drop">{% if r.drop %}{{ r.drop.name }}{% else %}<span class="muted">open spot</span>{% endif %}</td>
-        <td class="num card-hide-empty" data-label="Opp/g (last 3)">{% if r.trend %}{{ r.trend.recent_opportunities|pts }} <span class="{% if r.trend.opportunity_change > 0 %}move-in{% elif r.trend.opportunity_change < 0 %}move-out{% endif %}">({{ r.trend.opportunity_change|signed }})</span>{% endif %}</td>
-        <td class="num card-hide-empty" data-label="Snap% (last 3)">{% if r.trend.recent_snap_pct is not None %}{{ r.trend.recent_snap_pct|pct }}{% if r.trend.snap_pct_change is not None %} <span class="muted">({{ r.trend.snap_pct_change|pct }})</span>{% endif %}{% endif %}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="10">No free agents with remaining projections.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
-</div>
-<p class="muted">ROS gain: how many more points your optimal lineup scores over the rest of the season with this player instead of the player in the Drop column, compared against streaming the 3rd-best free agent at each position each week. Most free agents show 0 because they'd only sit on your bench or wouldn't beat a streamer. VORP is value over the replacement-level player at his position league-wide.</p>
+{% if helpful_rows %}
+  <h3 class="group-title">Top gains</h3>
+  <div class="rows edge-to-edge phone-only">
+    {% for r in helpful_rows %}{% include "web/_waiver_row.html" %}{% endfor %}
+  </div>
+  <div class="desktop-only">{% include "web/_waiver_table.html" with rows=helpful_rows %}</div>
+{% elif other_rows %}
+  <p class="muted no-gains">Nobody{% if position %} at {{ position }}{% endif %} improves your lineup right now.</p>
+{% else %}
+  <p class="muted no-gains">No free agents{% if position %} at {{ position }}{% endif %} with remaining projections.</p>
+{% endif %}
+
+{% if other_rows %}
+  {# nothing to fold away from when these are the only rows #}
+  <details class="more-rows" {% if not helpful_rows %}open{% endif %}>
+    <summary>
+      {{ other_rows|length }} more with no lineup gain
+      <svg class="waiver-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4.5 2.5 3.5 3.5-3.5 3.5"/></svg>
+    </summary>
+    <div class="rows edge-to-edge phone-only">
+      {% for r in other_rows %}{% include "web/_waiver_row.html" %}{% endfor %}
+    </div>
+    <div class="desktop-only">{% include "web/_waiver_table.html" with rows=other_rows %}</div>
+  </details>
+{% endif %}
+
+<p class="muted fine-print">Gain is how many more points your best lineup scores with this player instead of the player you'd drop, compared against streaming the 3rd-best free agent at each position each week. Most free agents show 0 because they'd only sit on your bench or wouldn't beat a streamer. Over replacement (VORP) compares a player with the replacement-level player at that position league-wide.</p>
 {% endblock %}
