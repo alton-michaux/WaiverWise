@@ -43,6 +43,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "web.middleware.MissingLeagueDataMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -58,6 +59,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "web.context_processors.sync_status",
+                "web.context_processors.team_picker",
             ],
         },
     },

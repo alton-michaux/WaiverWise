@@ -1,0 +1,25 @@
+{% load waiverwise %}
+<details class="waiver">
+  <summary>
+    <span class="waiver-gain {% if r.ros_gain >= 0.05 %}move-in{% elif r.ros_gain <= -0.05 %}move-out{% else %}muted{% endif %}">{{ r.ros_gain|signed }}</span>
+    <span class="waiver-main">
+      <span class="row-name">
+        {{ r.player.name }}
+        {% if r.helps_this_week %}<span class="tag tag-in">{{ r.next_week_gain|signed }} this week</span>{% endif %}
+        {% if r.player.injury_status and r.player.injury_status != "ACTIVE" %}<span class="tag tag-warn">{{ r.player.injury_status|status_label }}</span>{% endif %}
+        {% include "web/_waiver_tags.html" %}
+      </span>
+      <span class="muted row-meta">{{ r.player.position }} · {{ r.player.pro_team }} · {% if r.drop %}Drop {{ r.drop.name }}{% else %}Open roster spot{% endif %}</span>
+    </span>
+    <svg class="waiver-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m4.5 2.5 3.5 3.5-3.5 3.5"/></svg>
+  </summary>
+  <dl class="waiver-detail">
+    <div><dt>Week {{ week }}</dt><dd>{% if r.week_proj %}{{ r.week_proj.mean|pts }}{% else %}bye{% endif %}</dd></div>
+    <div><dt>Week gain</dt><dd>{{ r.next_week_gain|signed }}</dd></div>
+    <div><dt>Rest of season</dt><dd>{{ r.ros_points|pts }}</dd></div>
+    <div><dt>Over replacement</dt><dd>{{ r.vorp|signed }}</dd></div>
+    <div><dt>Rostered</dt><dd>{{ r.player.percent_owned|floatformat:0 }}%</dd></div>
+    {% if r.trend %}<div><dt>Targets + carries/game</dt><dd>{{ r.trend.recent_opportunities|pts }} ({{ r.trend.opportunity_change|signed }})</dd></div>{% endif %}
+    {% if r.trend.recent_snap_pct is not None %}<div><dt>Snap share</dt><dd>{{ r.trend.recent_snap_pct|pct }}{% if r.trend.snap_pct_change is not None %} ({{ r.trend.snap_pct_change|pct }}){% endif %}</dd></div>{% endif %}
+  </dl>
+</details>

@@ -1,9 +1,5 @@
 {% extends "web/base.html" %}
-{% block title %}Sign in · WaiverWise<script>
-  // signed out: have the service worker forget cached league pages on this device
-  navigator.serviceWorker?.ready.then((reg) => reg.active?.postMessage("clear-pages"));
-</script>
-{% endblock %}
+{% block title %}Sign in · WaiverWise{% endblock %}
 {% block content %}
 <article class="login">
   <h2>Sign in</h2>

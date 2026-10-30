@@ -1,10 +1,10 @@
-{% load static %}<!doctype html>
+{% load static waiverwise %}<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}WaiverWise{% endblock %}</title>
-  <meta name="theme-color" content="#0172ad">
+  <meta name="theme-color" content="#0b2a42">
   <link rel="manifest" href="{% url 'manifest' %}">
   <link rel="icon" href="{% static 'icons/icon-192.png' %}" sizes="192x192">
   {# iOS ignores manifest icons and needs these to run full-screen from the home screen #}
@@ -19,26 +19,45 @@
 </head>
 <body>
   {% url 'startsit' as startsit_url %}{% url 'waivers' as waivers_url %}{% url 'trades' as trades_url %}
-  <header class="container">
-    <nav>
-      <ul>
-        <li><a href="{% url 'home' %}" class="brand"><strong>WaiverWise</strong></a></li>
-        {% if user.is_authenticated and last_synced %}<li><small class="muted sync-age" title="{{ last_synced }}">synced {{ last_synced|timesince }} ago</small></li>{% endif %}
-      </ul>
+  <header class="appbar">
+    <div class="container appbar-inner">
+      <a href="{% url 'home' %}" class="brand {% if user.is_authenticated %}desktop-only{% endif %}">WaiverWise</a>
       {% if user.is_authenticated %}
-      <ul>
-        <li class="desktop-only"><a href="{{ startsit_url }}" {% if request.path == startsit_url %}aria-current="page"{% endif %}>Start/Sit</a></li>
-        <li class="desktop-only"><a href="{{ waivers_url }}" {% if request.path == waivers_url %}aria-current="page"{% endif %}>Waivers</a></li>
-        <li class="desktop-only"><a href="{{ trades_url }}" {% if request.path == trades_url %}aria-current="page"{% endif %}>Trades</a></li>
-        {% if user.is_staff %}<li class="desktop-only"><a href="{% url 'admin:index' %}">Admin</a></li>{% endif %}
-        <li>
-          <form method="post" action="{% url 'logout' %}" style="margin:0">{% csrf_token %}
-            <button type="submit" class="secondary outline signout">Sign out</button>
-          </form>
-        </li>
-      </ul>
+      <button type="button" class="team-button" data-open-dialog="team-sheet" aria-haspopup="dialog">
+        <span>{{ picker.team.name|default:"Account" }}</span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m2.5 4.5 3.5 3.5 3.5-3.5"/></svg>
+      </button>
+      <nav class="appbar-links desktop-only" aria-label="Sections">
+        <a href="{{ startsit_url }}" {% if request.path == startsit_url %}aria-current="page"{% endif %}>Start/Sit</a>
+        <a href="{{ waivers_url }}" {% if request.path == waivers_url %}aria-current="page"{% endif %}>Waivers</a>
+        <a href="{{ trades_url }}" {% if request.path == trades_url %}aria-current="page"{% endif %}>Trades</a>
+      </nav>
+      {% if last_synced %}<small class="sync-age" title="{{ last_synced }}">Synced {{ last_synced|short_age }} ago</small>{% endif %}
+      <dialog id="team-sheet" class="sheet" aria-label="Teams and account">
+        <article>
+          {% if picker.teams %}
+          <h3>Teams</h3>
+          <ul class="sheet-list">
+            {% for t in picker.teams %}
+            <li><a href="{{ picker.switch_url }}?team={{ t.espn_id }}" {% if t.pk == picker.team.pk %}aria-current="true"{% endif %}>
+              <span>{{ t.name }}</span>{% if t.espn_id == picker.my_team_id %}<small>Your team</small>{% endif %}
+            </a></li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          <ul class="sheet-list">
+            {% if user.is_staff %}<li><a href="{% url 'admin:index' %}">Admin</a></li>{% endif %}
+            <li>
+              <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+                <button type="submit">Sign out</button>
+              </form>
+            </li>
+          </ul>
+          <button type="button" class="secondary outline" data-close-dialog>Close</button>
+        </article>
+      </dialog>
       {% endif %}
-    </nav>
+    </div>
   </header>
   <main class="container">
     {% if user.is_authenticated and sync_problem %}<div class="banner" role="alert">{{ sync_problem }}</div>{% endif %}
@@ -46,13 +65,103 @@
   </main>
   {% if user.is_authenticated %}
   <nav class="tabbar" aria-label="Sections">
-    <a href="{{ startsit_url }}" {% if request.path == startsit_url %}aria-current="page"{% endif %}>Start/Sit</a>
-    <a href="{{ waivers_url }}" {% if request.path == waivers_url %}aria-current="page"{% endif %}>Waivers</a>
-    <a href="{{ trades_url }}" {% if request.path == trades_url %}aria-current="page"{% endif %}>Trades</a>
+    <a href="{{ startsit_url }}" {% if request.path == startsit_url %}aria-current="page"{% endif %}>
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h9"/></svg>
+      Start/Sit
+      <span hx-get="{% url 'moves_badge' %}" hx-trigger="load[window.matchMedia('(max-width: 767px)').matches]" hx-select=".badge" hx-swap="outerHTML" data-quiet></span>
+    </a>
+    <a href="{{ waivers_url }}" {% if request.path == waivers_url %}aria-current="page"{% endif %}>
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="7" r="3.2"/><path d="M2.5 17c.6-3.4 2.7-5 5.5-5s4.9 1.6 5.5 5M15.5 5v6M12.5 8h6"/></svg>
+      Waivers
+    </a>
+    <a href="{{ trades_url }}" {% if request.path == trades_url %}aria-current="page"{% endif %}>
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 7h13M12.5 3.5 16 7l-3.5 3.5M17 13H4M7.5 9.5 4 13l3.5 3.5"/></svg>
+      Trades
+    </a>
   </nav>
   {% endif %}
   <script>
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("{% url 'service_worker' %}");
+
+    // page loads can take a while (simulations, cold starts) and an installed PWA has no browser spinner
+    const root = document.documentElement;
+    let busyEl = null;
+    const startLoading = (el) => {
+      document.querySelector("dialog[open]")?.close();  // it sits above the loading bar
+      root.classList.add("navigating");
+      busyEl = el;
+      busyEl?.setAttribute("aria-busy", "true");
+    };
+    document.addEventListener("click", (e) => {
+      const opener = e.target.closest?.("[data-open-dialog]");
+      if (opener) document.getElementById(opener.dataset.openDialog)?.showModal();
+      // the dialog element itself only gets the click on its backdrop
+      if (e.target.matches?.("dialog") || e.target.closest?.("[data-close-dialog]")) e.target.closest("dialog").close();
+
+      const a = e.target.closest?.("a[href]");
+      if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (a.target || a.hasAttribute("download") || a.origin !== location.origin) return;
+      if (a.hash && a.pathname === location.pathname && a.search === location.search) return;
+      startLoading(a);
+    });
+    document.addEventListener("submit", (e) => { if (!e.defaultPrevented) startLoading(e.submitter); });
+    // the back button can restore this page from memory with the indicators still on
+    window.addEventListener("pageshow", () => {
+      root.classList.remove("navigating");
+      busyEl?.removeAttribute("aria-busy");
+      busyEl = null;
+    });
+
+    // htmx doesn't swap failed responses, which would leave a spinner up forever
+    document.addEventListener("htmx:afterRequest", (e) => {
+      if (e.detail.successful || root.classList.contains("navigating")) return;  // leaving the page aborts requests
+      if (e.detail.elt.hasAttribute("data-quiet")) return;  // nice to have, not worth an error
+      e.detail.target.innerHTML = '<p class="move-out">Couldn\'t load this. Reload the page to try again.</p>';
+    });
+
+    // the service worker answered with a saved copy (slow or unreachable server): say so, then swap in the latest
+    if ("savedAt" in root.dataset) {
+      const when = new Date(root.dataset.savedAt);
+      const label = isNaN(when) ? "" : ` from ${when.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`;
+      const note = document.createElement("div");
+      note.className = "saved-copy";
+      note.setAttribute("role", "status");
+      const showNote = (text, busy) => {
+        note.textContent = `Showing your saved copy${label}. ${text}`;
+        if (busy) note.insertAdjacentHTML("afterbegin", '<span aria-busy="true"></span> ');
+      };
+      showNote("Getting the latest…", true);
+      document.querySelector("main").prepend(note);
+
+      let retryTimer;
+      const retry = () => {
+        clearTimeout(retryTimer);
+        window.removeEventListener("online", retry);
+        showNote("Getting the latest…", true);
+        refresh();
+      };
+      const refresh = async () => {
+        try {
+          const res = await fetch(location.href, { cache: "no-store", headers: { "X-Fresh-Copy": "1" } });
+          if (res.redirected) return location.assign(res.url);  // signed out while this was cached
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const fresh = new DOMParser().parseFromString(await res.text(), "text/html");
+          for (const part of ["body > header", "body > main"]) {
+            document.querySelector(part).replaceWith(fresh.querySelector(part));
+          }
+          document.title = fresh.title;
+          delete root.dataset.savedAt;
+          window.htmx?.process(document.querySelector("main"));
+        } catch {
+          if (root.classList.contains("navigating")) return;  // leaving the page aborts requests
+          showNote("Can't reach the server right now. Will keep trying.", false);
+          // "online" can fire before the network really works, and a waking server sends no event at all
+          window.addEventListener("online", retry);
+          retryTimer = setTimeout(retry, 15000);
+        }
+      };
+      refresh();
+    }
   </script>
 </body>
 </html>

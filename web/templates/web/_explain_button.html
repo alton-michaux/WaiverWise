@@ -1,5 +1,5 @@
-<div id="explain-{{ kind }}">
-  <button class="secondary outline" hx-get="{% url 'explain' kind %}?{{ request.GET.urlencode }}" hx-target="#explain-{{ kind }}" hx-swap="innerHTML" hx-indicator="this" hx-disabled-elt="this">
-    Explain this
+<div id="explain-{{ kind }}{{ suffix }}">
+  <button class="{{ button_class|default:"secondary outline" }}" hx-get="{% url 'explain' kind %}?{% firstof query request.GET.urlencode %}" hx-target="#explain-{{ kind }}{{ suffix }}" hx-swap="innerHTML" hx-indicator="this" hx-disabled-elt="this">
+    <span class="when-idle">{{ label|default:"Explain this" }}</span><span class="when-busy">Claude is writing…</span>
   </button>
 </div>

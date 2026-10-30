@@ -45,7 +45,7 @@ Manual: `docker compose exec web python manage.py sync_all [--only league nfl pr
 uv run pytest
 ```
 
-CI (`.github/workflows/tests.yml`) runs the suite against Postgres 16 on every PR and on pushes to `dev` and `master`, and fails if a model change is missing its migration. Locally, tests use SQLite unless `DATABASE_URL` is set.
+CI (`.github/workflows/tests.yml`) runs the suite against Postgres 16 on every PR and on pushes to `dev` and `main`, and fails if a model change is missing its migration. Locally, tests use SQLite unless `DATABASE_URL` is set.
 
 ## Deploying (Render + GitHub Actions, free)
 
@@ -60,7 +60,7 @@ CI (`.github/workflows/tests.yml`) runs the suite against Postgres 16 on every P
 3. Fill in the prompted values: `DATABASE_URL` (the database's **Internal** URL), `ANTHROPIC_API_KEY`, and `ESPN_MY_TEAM_ID`. `SECRET_KEY` is generated for you. ESPN cookies aren't needed on Render, since syncs run in GitHub Actions.
 4. Create an account once it's live: Render dashboard → the service → **Shell**, then `python manage.py createsuperuser`.
 
-The service deploys from `master`. Merging `dev` into `master` is a release.
+The service deploys from `main` (the default branch). Merging `dev` into `main` is a release.
 
 ### 2. Scheduled syncs on GitHub Actions
 

@@ -1,0 +1,19 @@
+{% extends "web/base.html" %}
+{% block title %}Waiting for data · WaiverWise{% endblock %}
+{% block content %}
+<article>
+  {% if reason == "no-league" %}
+    <h2>No league data yet</h2>
+    <p>The database is set up, but the league hasn't been synced. Run the first sync:</p>
+    <ul>
+      <li><strong>Production:</strong> GitHub → Actions → <em>Sync league data</em> → Run workflow.</li>
+      <li><strong>Locally:</strong> <code>docker compose exec web python manage.py sync_all</code></li>
+    </ul>
+    <p class="muted">After that, scheduled syncs keep it current. A full sync takes about a minute.</p>
+  {% else %}
+    <h2>Your team wasn't found</h2>
+    <p>League data is synced, but no team matches <code>ESPN_MY_TEAM_ID={{ team_id|default:"(not set)" }}</code>.
+      It's the <code>teamId</code> in your ESPN team page's URL; check that the setting matches.</p>
+  {% endif %}
+</article>
+{% endblock %}

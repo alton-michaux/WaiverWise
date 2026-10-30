@@ -6,7 +6,8 @@ from django.views.decorators.cache import cache_control
 from django.shortcuts import get_object_or_404, redirect, render
 
 from analysis.startsit import MODES
-from web import narrate, services
+from nfl.consensus import remaining_weeks
+from web import deals, narrate, services
 
 
 def home(request):
@@ -15,7 +16,38 @@ def home(request):
 
 def _team(request, league):
     team_id = request.GET.get("team")
-    return get_object_or_404(league.teams, espn_id=team_id) if team_id else services.my_team(league)
+    if team_id:
+        if not team_id.isdigit():
+            raise Http404
+        return get_object_or_404(league.teams, espn_id=team_id)
+    return services.remembered_team(request, league) or services.my_team(league)
+
+
+def _page(request, template, context):
+    """Render a full page, remembering a team picked with ?team= for the other tabs.
+
+    A cookie, not the session: SESSION_SAVE_EVERY_REQUEST means a trade finder request
+    still running when you switch teams would save its older session over the new choice.
+    """
+    response = render(request, template, context)
+    if "team" in request.GET:
+        response.set_cookie(
+            services.TEAM_COOKIE,
+            context["team"].espn_id,
+            max_age=settings.SESSION_COOKIE_AGE,
+            secure=settings.SESSION_COOKIE_SECURE,
+            httponly=True,
+            samesite="Lax",
+        )
+    return response
+
+
+# value, label, what it does; order matches the buttons on the page
+START_SIT_MODES = [
+    ("mean", "Balanced", "Most projected points."),
+    ("floor", "Safe floor", "Protects your worst case."),
+    ("ceiling", "Big upside", "Chases ceiling games."),
+]
 
 
 def startsit(request):
@@ -25,9 +57,15 @@ def startsit(request):
     if mode not in MODES:
         mode = "mean"
     context = services.start_sit(team, mode)
-    context["teams"] = league.teams.order_by("name")
-    context["modes"] = MODES
-    return render(request, "web/startsit.html", context)
+    context["mode_options"] = START_SIT_MODES
+    context["mode_label"], context["mode_note"] = next((label, note) for v, label, note in START_SIT_MODES if v == mode)
+    return _page(request, "web/startsit.html", context)
+
+
+def moves_badge(request):
+    """HTMX partial: the Start/Sit tab's count of moves waiting, loaded after the page so no tab waits on it."""
+    league = services.current_league()
+    return render(request, "web/_moves_badge.html", {"count": services.move_count(_team(request, league))})
 
 
 WAIVER_POSITIONS = ["QB", "RB", "WR", "TE", "K", "D/ST"]
@@ -40,12 +78,8 @@ def waivers(request):
     if position not in WAIVER_POSITIONS:
         position = None
     context = services.waivers(team, position)
-    context["teams"] = league.teams.order_by("name")
     context["positions"] = WAIVER_POSITIONS
-    return render(request, "web/waivers.html", context)
-
-
-FINDER_LIMIT = 5
+    return _page(request, "web/waivers.html", context)
 
 
 def _trade_context(request) -> dict:
@@ -67,7 +101,6 @@ def _trade_context(request) -> dict:
         "league": league,
         "team": team,
         "partner": partner,
-        "teams": league.teams.order_by("name"),
         "others": others,
         "my_roster": services.roster_choices(ctx, team),
         "their_roster": services.roster_choices(ctx, partner),
@@ -79,26 +112,24 @@ def _trade_context(request) -> dict:
 
 
 def trades(request):
-    return render(request, "web/trades.html", _trade_context(request))
-
-
-def trade_finder(request):
-    """HTMX partial: best mutually beneficial trades with one partner."""
+    # a verdict or an edit of one means the builder; otherwise lead with the best deals
+    if request.GET.get("view") == "build" or "give" in request.GET or "get" in request.GET:
+        return _page(request, "web/trades.html", {**_trade_context(request), "view": "build"})
     league = services.current_league()
     team = _team(request, league)
-    partner = get_object_or_404(league.teams, espn_id=request.GET.get("partner"))
-    ctx = services.TradeContext(league)
-    found = ctx.find(team, partner)
-    return render(
-        request,
-        "web/_trade_finder.html",
-        {
-            "team": team,
-            "partner": partner,
-            "trades": [services.describe(ctx, t) for t in found[:FINDER_LIMIT]],
-            "total": len(found),
-        },
-    )
+    context = {"league": league, "team": team, "weeks": remaining_weeks(league), "view": "best"}
+    # already searched (the sync does this for your team): show it now rather than after another request
+    stored = deals.best_deals(team, search=False)
+    return _page(request, "web/trades.html", {**context, "best": stored if stored["done"] else None})
+
+
+def best_deals(request):
+    """HTMX partial: ranked deals, with progress while a slow server works through the league."""
+    league = services.current_league()
+    team = _team(request, league)
+    partner_id = request.GET.get("partner")
+    partner = get_object_or_404(league.teams.exclude(pk=team.pk), espn_id=partner_id) if partner_id else None
+    return render(request, "web/_best_deals.html", {"best": deals.best_deals(team, partner)})
 
 
 def _startsit_payload(request):
@@ -158,7 +189,7 @@ def manifest(request):
             "scope": "/",
             "display": "standalone",
             "background_color": "#ffffff",
-            "theme_color": "#0172ad",
+            "theme_color": "#0b2a42",
             "icons": [
                 icon("icon-192.png", "192x192"),
                 icon("icon-512.png", "512x512"),
