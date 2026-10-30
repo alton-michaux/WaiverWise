@@ -26,7 +26,8 @@ class Recommendation:
     best_points: float
     current_win_prob: float | None
     best_win_prob: float | None
-    moves: list[tuple[int, int]]  # (bench -> start, start -> bench) pairs, slot-compatible
+    # (bench -> start, start -> bench) pairs, slot-compatible; None going out when filling an empty slot
+    moves: list[tuple[int, int | None]]
 
 
 def value(proj: Projection | None, mode: str) -> float:
@@ -85,7 +86,7 @@ def recommend(
     )
 
 
-def pair_moves(ins: list[RosterSpot], outs: list[RosterSpot]) -> list[tuple[int, int]]:
+def pair_moves(ins: list[RosterSpot], outs: list[RosterSpot]) -> list[tuple[int, int | None]]:
     """Pair each incoming starter with an outgoing one whose slot he can fill.
 
     Bipartite matching (augmenting paths), so a chain like WR-in / RB-out-of-FLEX still pairs.
@@ -111,6 +112,6 @@ def pair_moves(ins: list[RosterSpot], outs: list[RosterSpot]) -> list[tuple[int,
     for spot_in in ins:
         assign(spot_in, set())
     pairs = {i: o for o, i in match.items()}
-    # anything unmatched (shouldn't happen with a valid lineup) still gets listed
+    # anything unmatched still gets listed; with nobody left to bench, the player fills an empty slot
     leftover_outs = [o.id for o in outs if o.id not in match]
-    return [(s.id, pairs[s.id] if s.id in pairs else leftover_outs.pop(0)) for s in ins]
+    return [(s.id, pairs[s.id] if s.id in pairs else leftover_outs.pop(0) if leftover_outs else None) for s in ins]

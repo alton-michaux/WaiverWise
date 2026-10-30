@@ -68,6 +68,7 @@
     <a href="{{ startsit_url }}" {% if request.path == startsit_url %}aria-current="page"{% endif %}>
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h9"/></svg>
       Start/Sit
+      <span hx-get="{% url 'moves_badge' %}" hx-trigger="load[window.matchMedia('(max-width: 767px)').matches]" hx-select=".badge" hx-swap="outerHTML" data-quiet></span>
     </a>
     <a href="{{ waivers_url }}" {% if request.path == waivers_url %}aria-current="page"{% endif %}>
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="7" r="3.2"/><path d="M2.5 17c.6-3.4 2.7-5 5.5-5s4.9 1.6 5.5 5M15.5 5v6M12.5 8h6"/></svg>
@@ -114,6 +115,7 @@
     // htmx doesn't swap failed responses, which would leave a spinner up forever
     document.addEventListener("htmx:afterRequest", (e) => {
       if (e.detail.successful || root.classList.contains("navigating")) return;  // leaving the page aborts requests
+      if (e.detail.elt.hasAttribute("data-quiet")) return;  // nice to have, not worth an error
       e.detail.target.innerHTML = '<p class="move-out">Couldn\'t load this. Reload the page to try again.</p>';
     });
 

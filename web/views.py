@@ -41,6 +41,14 @@ def _page(request, template, context):
     return response
 
 
+# value, label, what it does; order matches the buttons on the page
+START_SIT_MODES = [
+    ("mean", "Balanced", "Most projected points."),
+    ("floor", "Safe floor", "Protects your worst case."),
+    ("ceiling", "Big upside", "Chases ceiling games."),
+]
+
+
 def startsit(request):
     league = services.current_league()
     team = _team(request, league)
@@ -48,8 +56,15 @@ def startsit(request):
     if mode not in MODES:
         mode = "mean"
     context = services.start_sit(team, mode)
-    context["modes"] = MODES
+    context["mode_options"] = START_SIT_MODES
+    context["mode_label"], context["mode_note"] = next((label, note) for v, label, note in START_SIT_MODES if v == mode)
     return _page(request, "web/startsit.html", context)
+
+
+def moves_badge(request):
+    """HTMX partial: the Start/Sit tab's count of moves waiting, loaded after the page so no tab waits on it."""
+    league = services.current_league()
+    return render(request, "web/_moves_badge.html", {"count": services.move_count(_team(request, league))})
 
 
 WAIVER_POSITIONS = ["QB", "RB", "WR", "TE", "K", "D/ST"]

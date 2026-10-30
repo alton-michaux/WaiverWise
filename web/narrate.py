@@ -117,7 +117,8 @@ def startsit_payload(ctx: dict) -> dict:
         "current_lineup": {"points": rec.current_points, "win_pct": rec.current_win_prob},
         "best_lineup": {"points": rec.best_points, "win_pct": rec.best_win_prob},
         "recommended_moves": [
-            {"start": i.player.name, "bench": o.player.name, "slot": o.slot} for i, o in ctx["moves"]
+            {"start": i.player.name, "bench": o.player.name if o else None, "slot": o.slot if o else "empty slot"}
+            for i, o in ctx["moves"]
         ],
         "roster": [
             {

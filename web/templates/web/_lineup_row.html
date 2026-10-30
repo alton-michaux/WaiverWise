@@ -1,0 +1,21 @@
+{% load waiverwise %}
+<div class="row{% if row.slot in non_starting and best not in non_starting %} row-in{% elif row.slot not in non_starting and best in non_starting %} row-out{% endif %}">
+  <div class="row-slot">{{ row.slot|slot_label }}</div>
+  <div class="row-main">
+    <div class="row-name">
+      {{ row.player.name }}
+      {% if row.slot in non_starting and best not in non_starting %}<span class="tag tag-in">Start</span>{% elif row.slot not in non_starting and best in non_starting %}<span class="tag tag-out">Bench</span>{% endif %}
+      {% if row.player.injury_status and row.player.injury_status != "ACTIVE" %}<span class="tag tag-warn">{{ row.player.injury_status|status_label }}</span>{% endif %}
+      {% if row.locked %}<span class="tag">Locked</span>{% endif %}
+      {% if row.pending %}<span class="tag">{{ row.pending }}</span>{% endif %}
+    </div>
+    <div class="muted row-meta">{{ row.player.position }} · {{ row.player.pro_team }}{% if row.opponent != "BYE" %} vs {{ row.opponent }}{% endif %}</div>
+  </div>
+  <div class="row-points">
+    {% if row.projection %}{{ row.projection.mean|pts }}{% else %}<span class="muted row-meta">bye</span>{% endif %}
+    {% with bar=row.bar %}{% if bar %}
+    <div class="range" role="img" aria-label="Floor {{ row.projection.floor|pts }}, ceiling {{ row.projection.ceiling|pts }}"><i style="left:{{ bar.left }}%;width:{{ bar.width }}%"></i><b style="left:{{ bar.mark }}%"></b></div>
+    <div class="muted range-label">{{ row.projection.floor|pts }}–{{ row.projection.ceiling|pts }}</div>
+    {% endif %}{% endwith %}
+  </div>
+</div>

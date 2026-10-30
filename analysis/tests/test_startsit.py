@@ -80,3 +80,10 @@ def test_moves_pair_through_flex_chain():
         flex_spot(9, "WR", "BE", 10),
     ]
     assert recommend(roster, FULL).moves == [(9, 7)]
+
+
+def test_filling_an_empty_slot_has_nobody_to_bench():
+    # a real roster: two WR slots, one empty, and an extra player on the bench
+    slots = {"WR": 2, "BE": 2}
+    roster = [spot(1, "WR", "WR", 12), spot(2, "WR", "BE", 10), spot(3, "WR", "BE", 8)]
+    assert recommend(roster, slots).moves == [(2, None)]
