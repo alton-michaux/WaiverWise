@@ -1,0 +1,2 @@
+{% if r.pending %}<span class="tag">{{ r.pending }}</span>{% endif %}
+{% if r.player.fa_status == "WAIVERS" %}<span class="tag" title="Claim before waivers clear">{% if r.player.waiver_clears %}Waivers · clears {{ r.player.waiver_clears|date:"D g:i A" }}{% else %}On waivers{% endif %}</span>{% endif %}

@@ -1,0 +1,35 @@
+{% load waiverwise %}
+<div class="overflow-auto">
+<table class="striped">
+  <thead>
+    <tr>
+      <th>Player</th><th class="num">Own%</th><th class="num">Wk {{ week }}</th><th class="num">ROS</th><th class="num">VORP</th>
+      <th class="num" title="Your lineup points gained this week">Wk gain</th>
+      <th class="num" title="Your lineup points gained rest of season, net of the drop">ROS gain</th>
+      <th title="Best player to drop for this add">Drop</th>
+      <th class="num" title="Targets + carries per game, last 3 games (change vs earlier)">Opp/g</th>
+      <th class="num" title="Offensive snap %, last 3 games (change vs earlier)">Snap%</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>
+          {{ r.player.name }} <span class="muted">{{ r.player.position }} · {{ r.player.pro_team }}</span>
+          {% if r.player.injury_status and r.player.injury_status != "ACTIVE" %}<span class="tag tag-warn">{{ r.player.injury_status|status_label }}</span>{% endif %}
+          {% include "web/_waiver_tags.html" %}
+        </td>
+        <td class="num">{{ r.player.percent_owned|floatformat:0 }}</td>
+        <td class="num">{% if r.week_proj %}{{ r.week_proj.mean|pts }}{% else %}<span class="muted">bye</span>{% endif %}</td>
+        <td class="num">{{ r.ros_points|pts }}</td>
+        <td class="num">{{ r.vorp|signed }}</td>
+        <td class="num {% if r.helps_this_week %}move-in{% endif %}">{{ r.next_week_gain|signed }}</td>
+        <td class="num {% if r.ros_gain >= 0.05 %}move-in{% elif r.ros_gain <= -0.05 %}move-out{% endif %}">{{ r.ros_gain|signed }}</td>
+        <td>{% if r.drop %}{{ r.drop.name }}{% else %}<span class="muted">open spot</span>{% endif %}</td>
+        <td class="num">{% if r.trend %}{{ r.trend.recent_opportunities|pts }} <span class="{% if r.trend.opportunity_change > 0 %}move-in{% elif r.trend.opportunity_change < 0 %}move-out{% endif %}">({{ r.trend.opportunity_change|signed }})</span>{% endif %}</td>
+        <td class="num">{% if r.trend.recent_snap_pct is not None %}{{ r.trend.recent_snap_pct|pct }}{% if r.trend.snap_pct_change is not None %} <span class="muted">({{ r.trend.snap_pct_change|pct }})</span>{% endif %}{% endif %}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
