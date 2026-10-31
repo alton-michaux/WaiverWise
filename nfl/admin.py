@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Projection, ProjectionSnapshot, Usage
+from .models import GameLine, Projection, ProjectionSnapshot, Usage
 
 
 @admin.register(Projection)
@@ -15,6 +15,13 @@ class ProjectionSnapshotAdmin(admin.ModelAdmin):
     list_display = ["player", "week", "mean", "espn", "sleeper", "opponent", "captured_at"]
     list_filter = ["week"]
     search_fields = ["player__name"]
+
+
+@admin.register(GameLine)
+class GameLineAdmin(admin.ModelAdmin):
+    list_display = ["team", "week", "is_home", "spread", "total", "implied_total", "rest_days", "roof"]
+    list_filter = ["week"]
+    search_fields = ["team"]
 
 
 @admin.register(Usage)

@@ -5,7 +5,7 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from league.models import League, Player, PlayerWeek, ProGame
-from nfl.models import Projection, ProjectionSnapshot
+from nfl.models import GameLine, Projection, ProjectionSnapshot
 
 pytestmark = pytest.mark.django_db
 
@@ -102,3 +102,31 @@ def test_no_league_is_a_no_op():
     call_command("snapshot_projections")
 
     assert not ProjectionSnapshot.objects.exists()
+
+
+def test_saves_the_line_and_rating_as_of_this_week(league):
+    add_game("BUF", "MIA", later())
+    player = add_player(1, "BUF", sleeper=14.0)
+    GameLine.objects.create(season=SEASON, week=WEEK, team="BUF", implied_total=27.5)
+    for week in (1, 2, 3):
+        add_game("BUF", "MIA", later(), week=week)
+        PlayerWeek.objects.create(player=player, season=SEASON, week=week, points=20.0, breakdown={"rec": 1})
+    for week in (4, 5):
+        add_game("BUF", "KC", later(), week=week)
+        PlayerWeek.objects.create(player=player, season=SEASON, week=week, points=10.0, breakdown={"rec": 1})
+
+    call_command("snapshot_projections")
+
+    snap = ProjectionSnapshot.objects.get(player=player)
+    assert snap.implied_total == 27.5
+    assert snap.opp_rating > 0
+
+
+def test_no_line_or_rating_is_stored_as_null(league):
+    add_game("BUF", "MIA", later())
+    player = add_player(1, "BUF", sleeper=14.0)
+
+    call_command("snapshot_projections")
+
+    snap = ProjectionSnapshot.objects.get(player=player)
+    assert (snap.implied_total, snap.opp_rating) == (None, None)
