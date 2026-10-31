@@ -63,6 +63,11 @@ class Command(BaseCommand):
             SyncRun.objects.create(step=name, ok=True)
             self.stdout.write(f"[{name}] done in {time.monotonic() - started:.1f}s")
         try:
+            call_command("snapshot_projections", stdout=self.stdout, stderr=self.stderr)
+        except Exception:
+            # the app doesn't read these, so a missed snapshot only costs the next sync's refresh
+            log.exception("snapshotting projections failed")
+        try:
             call_command("refresh_best_deals", stdout=self.stdout, stderr=self.stderr)
         except Exception:
             # the Trades tab searches on demand when this is missing, so it isn't worth failing the sync
