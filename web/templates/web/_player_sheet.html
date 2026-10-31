@@ -1,0 +1,50 @@
+{% load waiverwise %}
+<div class="player-sheet">
+  <h3>{{ player.name }}{% if player.injury_status and player.injury_status != "ACTIVE" %} <span class="tag tag-warn">{{ player.injury_status|status_label }}</span>{% endif %}</h3>
+  <p class="muted row-meta">{{ player.position }} · {{ player.pro_team }}</p>
+
+  <h4>Week {{ week }}</h4>
+  {% if this_week.opponent %}
+    <dl class="waiver-detail">
+      <div><dt>Opponent</dt><dd>{% if this_week.is_home is False %}@{% else %}vs{% endif %} {{ this_week.opponent }}</dd></div>
+      {% if matchup %}<div><dt>Matchup</dt><dd>{{ matchup.grade }}</dd></div>{% endif %}
+      {% if line.implied_total is not None %}
+        <div><dt>Team implied total</dt><dd>{{ line.implied_total|pts }}</dd></div>
+        <div><dt>Spread</dt><dd>{{ line.spread|signed }}</dd></div>
+      {% endif %}
+      {% if short_week %}<div><dt>Rest</dt><dd>Short week ({{ line.rest_days }} days)</dd></div>
+      {% elif off_bye %}<div><dt>Rest</dt><dd>Off a bye</dd></div>{% endif %}
+      {% if roof %}<div><dt>Venue</dt><dd>{{ roof }}</dd></div>{% endif %}
+    </dl>
+  {% else %}
+    <p class="muted">Bye this week.</p>
+  {% endif %}
+
+  {% if regular_schedule %}
+    <h4>Rest of season{% if ros_outlook %} <span class="tag{% if ros_outlook.grade == "Good" %} tag-in{% elif ros_outlook.grade == "Tough" %} tag-out{% endif %}">{{ ros_outlook.grade }} schedule</span>{% endif %}</h4>
+    {% include "web/_schedule_strip.html" with weeks=regular_schedule %}
+  {% endif %}
+  {% if playoff_schedule %}
+    <h4>Fantasy playoffs{% if playoff_outlook %} <span class="tag{% if playoff_outlook.grade == "Good" %} tag-in{% elif playoff_outlook.grade == "Tough" %} tag-out{% endif %}">{{ playoff_outlook.grade }} schedule</span>{% endif %}</h4>
+    {% include "web/_schedule_strip.html" with weeks=playoff_schedule %}
+  {% endif %}
+
+  {% if role %}
+    <h4>Role, last 3 games</h4>
+    <dl class="waiver-detail">
+      {% if role.recent_target_share is not None %}<div><dt>Target share</dt><dd>{{ role.recent_target_share|pct }}</dd></div>{% endif %}
+      {% if role.recent_air_yards_share is not None %}<div><dt>Air yards share</dt><dd>{{ role.recent_air_yards_share|pct }}</dd></div>{% endif %}
+      {% if role.recent_snap_pct is not None %}<div><dt>Snap share</dt><dd>{{ role.recent_snap_pct|pct }}{% if role.snap_pct_change is not None %} ({{ role.snap_pct_change|pct }}){% endif %}</dd></div>{% endif %}
+      <div><dt>Targets + carries/game</dt><dd>{{ role.recent_opportunities|pts }} ({{ role.opportunity_change|signed }})</dd></div>
+    </dl>
+  {% endif %}
+
+  {% if consistency %}
+    <h4>Consistency</h4>
+    <dl class="waiver-detail">
+      <div><dt>Startable games</dt><dd>{{ consistency.startable }} of {{ consistency.games }}</dd></div>
+      <div><dt>High / low</dt><dd>{{ consistency.high|pts }} / {{ consistency.low|pts }}</dd></div>
+    </dl>
+    <p class="muted fine-print">Startable means finishing among the {{ starters }} {{ player.position }}s this league starts each week.</p>
+  {% endif %}
+</div>

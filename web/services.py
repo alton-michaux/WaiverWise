@@ -8,17 +8,18 @@ from django.conf import settings
 from django.db.models import Q
 
 from analysis.lineup import NON_STARTING
-from analysis.matchups import Rating
+from analysis.consistency import Consistency, consistency
+from analysis.matchups import Rating, schedule_ratings
 from analysis.projections import Projection
 from analysis.startsit import Recommendation, RosterSpot, recommend
 from analysis.trends import Trend, UsageWeek, trend
 from analysis import trades
 from analysis.season import SeasonEvaluator
-from analysis.value import PlayerValue, vorp
+from analysis.value import PlayerValue, starters_by_position, vorp
 from analysis.waivers import WeeklyPlayer, evaluate, roster_capacity, streamers
-from league.models import League, Matchup, PendingMove, Player, ProGame, RosterEntry, Team
-from nfl.consensus import game_started, remaining_weeks, week_kickoffs, weekly_projections
-from nfl.matchups import defense_ratings
+from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from nfl.consensus import game_started, playoff_weeks, remaining_weeks, week_kickoffs, weekly_projections
+from nfl.matchups import defense_ratings, upcoming_opponents
 from nfl.models import GameLine, Usage
 
 BAR_SCALE_POINTS = 40  # a full-width range bar on the lineup
@@ -197,6 +198,94 @@ def move_count(team: Team) -> int:
 
 TREND_POSITIONS = {"QB", "RB", "WR", "TE"}
 SMALLEST_GAIN = 0.05  # anything less displays as +0.0
+
+SHORT_REST_DAYS = 7  # fewer than this is a short week
+BYE_REST_DAYS = 13  # Sunday to the Sunday after next, give or take; a Thursday game before a Sunday one is only 10
+ROOF_LABELS = {"dome": "Dome", "closed": "Roof closed", "open": "Roof open", "outdoors": "Outdoors"}
+
+
+@dataclass
+class ScheduleWeek:
+    week: int
+    opponent: str | None  # None = bye
+    is_home: bool | None = None
+    grade: str = ""
+
+
+def _consistency(league: League, player: Player) -> tuple[Consistency | None, int]:
+    """The player's game log against what the league starts at that position, and how many that is."""
+    rows = list(
+        PlayerWeek.objects.filter(season=league.season, week__lt=league.current_week)
+        .exclude(breakdown={})  # empty breakdown = didn't play
+        .values_list("player_id", "player__position", "week", "points")
+    )
+    totals = defaultdict(float)
+    weekly = defaultdict(list)
+    history = {}
+    for pid, position, week, points in rows:
+        totals[(pid, position)] += points or 0
+        if position == player.position:
+            weekly[week].append(points or 0)
+        if pid == player.pk:
+            history[week] = points or 0
+    # season so far stands in for rest of season: it only decides who fills the flex spots
+    pool = [PlayerValue(pid, position, total) for (pid, position), total in totals.items()]
+    starters = starters_by_position(pool, league.lineup_slots, league.team_count).get(player.position, 0)
+    return consistency(history, weekly, starters), starters
+
+
+def player_sheet(league: League, player: Player) -> dict:
+    season, week = league.season, league.current_week
+    weeks = remaining_weeks(league)
+    playoffs = playoff_weeks(league)
+    ratings = defense_ratings(league)
+    games = dict(
+        ProGame.objects.filter(season=season, team=player.pro_team, week__in=weeks).values_list("week", "opponent")
+    )
+    lines = {line.week: line for line in GameLine.objects.filter(season=season, team=player.pro_team, week__in=weeks)}
+
+    def grade(opponent):
+        rating = ratings.get((opponent, player.position))
+        return rating.grade if rating else ""
+
+    schedule = [
+        ScheduleWeek(w, games[w], lines[w].is_home if w in lines else None, grade(games[w]))
+        if w in games
+        else ScheduleWeek(w, None)
+        for w in weeks
+    ]
+
+    def outlook(stretch):
+        return schedule_ratings(upcoming_opponents(league, stretch), player.position, ratings).get(player.pro_team)
+
+    line = lines.get(week)
+    rest = line.rest_days if line else None
+    role = None
+    if player.position in TREND_POSITIONS:
+        usage = Usage.objects.filter(season=season, player=player)
+        role = trend(
+            [UsageWeek(u.week, u.snap_pct, u.targets, u.carries, u.target_share, u.air_yards_share) for u in usage]
+        )
+    games_log, starters = _consistency(league, player)
+    return {
+        "player": player,
+        "week": week,
+        "this_week": schedule[0] if schedule else None,
+        "matchup": ratings.get((games.get(week), player.position)),
+        "line": line,
+        "roof": ROOF_LABELS.get(line.roof, "") if line else "",
+        "short_week": rest is not None and rest < SHORT_REST_DAYS,
+        "off_bye": rest is not None and rest >= BYE_REST_DAYS,
+        "regular_schedule": [s for s in schedule if s.week not in playoffs],
+        "playoff_schedule": [s for s in schedule if s.week in playoffs],
+        "ros_outlook": outlook(weeks),
+        "playoff_outlook": outlook(playoffs) if playoffs else None,
+        "playoffs": playoffs,
+        "role": role,
+        "consistency": games_log,
+        "starters": starters,
+    }
+
 
 
 @dataclass

@@ -36,6 +36,12 @@ class Rating:
     grade: str
 
 
+def _grade(index: int, count: int) -> str:
+    """Grade for the `index`-th softest of `count`."""
+    graded = count // GRADED_SHARE
+    return GOOD if index < graded else TOUGH if index >= count - graded else NEUTRAL
+
+
 def _deltas(games: list[GameScore]) -> dict[tuple[str, str], list[float]]:
     """(defense, position) -> each game's points minus the offense's average in its other games."""
     by_offense = defaultdict(list)
@@ -59,11 +65,28 @@ def ratings(games: list[GameScore]) -> dict[tuple[str, str], Rating]:
     out = {}
     for position, rated in by_position.items():
         rated.sort(key=lambda r: (-r[0], r[1]))
-        graded = len(rated) // GRADED_SHARE
         for i, (points, defense) in enumerate(rated):
-            grade = GOOD if i < graded else TOUGH if i >= len(rated) - graded else NEUTRAL
-            out[(defense, position)] = Rating(round(points, 2), i + 1, grade)
+            out[(defense, position)] = Rating(round(points, 2), i + 1, _grade(i, len(rated)))
     return out
+
+
+def schedule_ratings(
+    opponents: dict[str, list[str]], position: str, rated: dict[tuple[str, str], Rating]
+) -> dict[str, Rating]:
+    """Pro team -> how soft its upcoming opponents are at `position`, graded against the other teams.
+
+    Unrated opponents count as average. Teams with no games in the stretch are left out.
+    """
+    averages = []
+    for team, faced in opponents.items():
+        if faced:
+            points = [r.points if (r := rated.get((opp, position))) else 0.0 for opp in faced]
+            averages.append((mean(points), team))
+    averages.sort(key=lambda a: (-a[0], a[1]))
+    return {
+        team: Rating(round(points, 2), i + 1, _grade(i, len(averages)))
+        for i, (points, team) in enumerate(averages)
+    }
 
 
 def implied_totals(total: float | None, home_spread_line: float | None) -> tuple[float | None, float | None]:
