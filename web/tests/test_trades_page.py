@@ -1,7 +1,9 @@
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.template.loader import render_to_string
 
+from analysis.matchups import Rating
 from analysis.projections import Projection
 from league.models import League, Player, RosterEntry, SyncRun, Team
 from web import deals, services
@@ -192,3 +194,39 @@ def test_failed_deal_search_does_not_fail_the_sync(mine, partner, monkeypatch):
 def test_refresh_skips_quietly_without_a_team(db, settings):
     settings.ESPN_MY_TEAM_ID = None
     call_command("refresh_best_deals")
+
+
+def grade_schedules(monkeypatch, ros, playoffs):
+    monkeypatch.setattr(services.ScheduleGrades, "ros", lambda self, player: ros)
+    monkeypatch.setattr(services.ScheduleGrades, "playoffs", lambda self, player: playoffs)
+
+
+def test_verdict_shows_each_players_schedule(signed_in, partner, mine, monkeypatch):
+    grade_schedules(monkeypatch, Rating(-3.0, 30, "Tough"), Rating(3.0, 2, "Good"))
+    deals.best_deals(mine)
+    html = signed_in.get("/trades/").content.decode()
+    assert "Schedule: Tough · Playoffs: Good" in html
+
+
+def test_deals_stored_before_schedules_existed_still_render(signed_in, mine, partner):
+    person = {"id": 1, "name": "Old Deal Guy", "position": "WR", "ros": 1}
+    deal = {
+        "you": 2, "them": 1, "you_before": 1, "you_after": 3, "them_before": 1, "them_after": 2,
+        "gets": [person], "gives": [person], "you_drop": [], "them_drop": [],
+    }
+    version = deals.data_version(mine.league)
+    TradeDeals.objects.create(team=mine, partner=partner, version=version, total=1, deals=[deal])
+    html = render_to_string("web/_best_deals.html", {"best": deals.best_deals(mine, partner, search=False)})
+    assert "Old Deal Guy" in html
+    assert "Schedule:" not in html
+
+
+def test_schedules_never_change_the_deals(mine, partner, monkeypatch):
+    def found():
+        ctx = services.TradeContext(mine.league)
+        return [(t.a.gives, t.a.gets, t.a.gain, t.b.gain) for t in ctx.find(mine, partner)]
+
+    grade_schedules(monkeypatch, Rating(3.0, 2, "Good"), Rating(3.0, 2, "Good"))
+    good = found()
+    grade_schedules(monkeypatch, Rating(-3.0, 30, "Tough"), Rating(-3.0, 30, "Tough"))
+    assert found() == good

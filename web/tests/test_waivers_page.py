@@ -4,9 +4,10 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from analysis.matchups import Rating
 from analysis.projections import Projection
 from league.models import League, Player, RosterEntry, Team
-from web import services
+from web import narrate, services
 
 pytestmark = pytest.mark.django_db
 
@@ -160,3 +161,55 @@ def row(ros_gain, week_gain):
 )
 def test_what_counts_as_helping(ros_gain, week_gain, helps):
     assert row(ros_gain, week_gain).helps is helps
+
+
+TOUGH_SCHEDULE = Rating(-3.0, 30, "Tough")
+GOOD_SCHEDULE = Rating(3.0, 2, "Good")
+AVERAGE_SCHEDULE = Rating(0.1, 15, "Neutral")
+
+
+def grade_schedules(monkeypatch, ros, playoffs):
+    monkeypatch.setattr(services.ScheduleGrades, "ros", lambda self, player: ros)
+    monkeypatch.setattr(services.ScheduleGrades, "playoffs", lambda self, player: playoffs)
+
+
+def test_tough_schedule_gets_a_chip_and_detail(signed_in, full_roster, means, monkeypatch):
+    add(5, "Pickup", fa_status="FREEAGENT")
+    means["Pickup"] = 20.0
+    grade_schedules(monkeypatch, TOUGH_SCHEDULE, GOOD_SCHEDULE)
+    html = signed_in.get("/waivers/").content.decode()
+    assert "Tough schedule" in html
+    assert "<dt>Playoff schedule</dt><dd>Good</dd>" in html
+
+
+def test_average_schedule_has_no_chip(signed_in, full_roster, means, monkeypatch):
+    add(5, "Pickup", fa_status="FREEAGENT")
+    means["Pickup"] = 20.0
+    grade_schedules(monkeypatch, AVERAGE_SCHEDULE, None)
+    html = signed_in.get("/waivers/").content.decode()
+    assert " schedule</span>" not in html
+    assert "<dt>Schedule</dt><dd>Neutral</dd>" in html
+    assert "Playoff schedule" not in html
+
+
+def test_schedules_never_change_the_ranking(mine, full_roster, means, monkeypatch):
+    add(5, "Pickup", fa_status="FREEAGENT")
+    add(6, "Other Pickup", fa_status="FREEAGENT")
+    means.update({"Pickup": 20.0, "Other Pickup": 15.0})
+
+    def ranking():
+        return [(r.player.name, r.ros_gain, r.next_week_gain) for r in services.waivers(mine)["rows"]]
+
+    grade_schedules(monkeypatch, GOOD_SCHEDULE, GOOD_SCHEDULE)
+    good = ranking()
+    grade_schedules(monkeypatch, TOUGH_SCHEDULE, TOUGH_SCHEDULE)
+    assert ranking() == good
+
+
+def test_explanation_gets_only_notable_schedules(mine, full_roster, means, monkeypatch):
+    add(5, "Pickup", fa_status="FREEAGENT")
+    means["Pickup"] = 20.0
+    grade_schedules(monkeypatch, TOUGH_SCHEDULE, AVERAGE_SCHEDULE)
+    target = narrate.waivers_payload(services.waivers(mine))["targets"][0]
+    assert target["ros_schedule"] == "Tough"
+    assert "playoff_schedule" not in target

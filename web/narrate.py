@@ -40,7 +40,9 @@ the user's optimal lineup scores over the rest of the season with a move, compar
 3rd-best free agent each week. Win % comes from 10,000 simulated matchups against the opponent's best lineup. \
 matchup = Good or Tough when the opponent is among the 8 softest or toughest defenses against that position, adjusted \
 for offenses faced; it's noisy, and missing means unremarkable or too few games. team_implied_total = points the betting \
-lines imply for the player's team. team_spread = negative when that team is favored."""
+lines imply for the player's team. team_spread = negative when that team is favored. ros_schedule and playoff_schedule = Good or Tough when the player's \
+team has one of the 8 softest or toughest remaining schedules at that position, or in the fantasy playoff weeks; missing \
+means unremarkable. ROS points already reflect these, so they explain the number rather than add to it."""
 
 
 class NarrationError(Exception):
@@ -123,6 +125,15 @@ def _game_context(row) -> dict:
     return out
 
 
+def _schedules(row) -> dict:
+    out = {}
+    if row.ros_schedule and row.ros_schedule.grade != NEUTRAL:
+        out["ros_schedule"] = row.ros_schedule.grade
+    if row.playoff_schedule and row.playoff_schedule.grade != NEUTRAL:
+        out["playoff_schedule"] = row.playoff_schedule.grade
+    return out
+
+
 def startsit_payload(ctx: dict) -> dict:
     rec = ctx["rec"]
     return {
@@ -174,6 +185,7 @@ def waivers_payload(ctx: dict) -> dict:
                 "this_week_gain": r.next_week_gain,
                 "ros_gain": r.ros_gain,
                 "drop_for_this_add": r.drop.name if r.drop else "open roster spot",
+                **_schedules(r),
                 **(
                     {
                         "opportunities_per_game_last3": r.trend.recent_opportunities,
@@ -195,7 +207,7 @@ def trade_payload(ctx: dict) -> dict:
     t = result["trade"]
 
     def rows(trade_rows):
-        return [{**_player(r.player), "ros_points": r.ros_points} for r in trade_rows]
+        return [{**_player(r.player), "ros_points": r.ros_points, **_schedules(r)} for r in trade_rows]
 
     return {
         "situation": (

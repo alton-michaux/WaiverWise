@@ -3,6 +3,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
+from functools import cache
 
 from django.conf import settings
 from django.db.models import Q
@@ -204,6 +205,27 @@ BYE_REST_DAYS = 13  # Sunday to the Sunday after next, give or take; a Thursday 
 ROOF_LABELS = {"dome": "Dome", "closed": "Roof closed", "open": "Roof open", "outdoors": "Outdoors"}
 
 
+class ScheduleGrades:
+    """Rest-of-season and fantasy playoff schedule grades, built once per request."""
+
+    def __init__(self, league: League):
+        self.ratings = defense_ratings(league)
+        self.opponents = {
+            "ros": upcoming_opponents(league, remaining_weeks(league)),
+            "playoffs": upcoming_opponents(league, playoff_weeks(league)),
+        }
+        self.graded = cache(self._graded)
+
+    def _graded(self, stretch: str, position: str) -> dict[str, Rating]:
+        return schedule_ratings(self.opponents[stretch], position, self.ratings)
+
+    def ros(self, player: Player) -> Rating | None:
+        return self.graded("ros", player.position).get(player.pro_team)
+
+    def playoffs(self, player: Player) -> Rating | None:
+        return self.graded("playoffs", player.position).get(player.pro_team)
+
+
 @dataclass
 class ScheduleWeek:
     week: int
@@ -238,7 +260,8 @@ def player_sheet(league: League, player: Player) -> dict:
     season, week = league.season, league.current_week
     weeks = remaining_weeks(league)
     playoffs = playoff_weeks(league)
-    ratings = defense_ratings(league)
+    schedules = ScheduleGrades(league)
+    ratings = schedules.ratings
     games = dict(
         ProGame.objects.filter(season=season, team=player.pro_team, week__in=weeks).values_list("week", "opponent")
     )
@@ -254,9 +277,6 @@ def player_sheet(league: League, player: Player) -> dict:
         else ScheduleWeek(w, None)
         for w in weeks
     ]
-
-    def outlook(stretch):
-        return schedule_ratings(upcoming_opponents(league, stretch), player.position, ratings).get(player.pro_team)
 
     line = lines.get(week)
     rest = line.rest_days if line else None
@@ -278,8 +298,8 @@ def player_sheet(league: League, player: Player) -> dict:
         "off_bye": rest is not None and rest >= BYE_REST_DAYS,
         "regular_schedule": [s for s in schedule if s.week not in playoffs],
         "playoff_schedule": [s for s in schedule if s.week in playoffs],
-        "ros_outlook": outlook(weeks),
-        "playoff_outlook": outlook(playoffs) if playoffs else None,
+        "ros_outlook": schedules.ros(player),
+        "playoff_outlook": schedules.playoffs(player),
         "playoffs": playoffs,
         "role": role,
         "consistency": games_log,
@@ -299,6 +319,8 @@ class WaiverRow:
     trend: Trend | None
     drop: Player | None = None
     pending: str = ""
+    ros_schedule: Rating | None = None
+    playoff_schedule: Rating | None = None
 
     @property
     def helps_this_week(self) -> bool:
@@ -347,6 +369,7 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
         usage[u.player_id].append(UsageWeek(u.week, u.snap_pct, u.targets, u.carries))
 
     by_id = {p.pk: p for p in players}
+    schedules = ScheduleGrades(league)
     rows = []
     for t in report.targets:
         p = by_id[t.id]
@@ -363,6 +386,8 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
                 trend=trend(usage[p.pk]) if p.position in TREND_POSITIONS else None,
                 drop=by_id.get(t.drop_id),
                 pending=pending.get(p.pk, ""),
+                ros_schedule=schedules.ros(p),
+                playoff_schedule=schedules.playoffs(p),
             )
         )
     # most targets gain nothing; fall back to league-wide value so the list stays useful
@@ -405,6 +430,7 @@ class TradeContext:
         self.season = SeasonEvaluator(league.lineup_slots, self.weeks, streamers(free_agents, self.weeks))
         self.capacity = roster_capacity(league.lineup_slots)
         self.tied_up = tied_up(league)
+        self.schedules = ScheduleGrades(league)
 
     def ros_points(self, pid: int) -> float:
         return round(sum(self.weekly[pid].mean(w) for w in self.weeks), 2)
@@ -430,10 +456,21 @@ class TradeRow:
     player: Player
     ros_points: float
     pending: str = ""
+    ros_schedule: Rating | None = None
+    playoff_schedule: Rating | None = None
 
 
 def trade_rows(ctx: TradeContext, ids: list[int]) -> list[TradeRow]:
-    return [TradeRow(ctx.players[i], ctx.ros_points(i), ctx.tied_up.get(i, "")) for i in ids]
+    return [
+        TradeRow(
+            ctx.players[i],
+            ctx.ros_points(i),
+            ctx.tied_up.get(i, ""),
+            ctx.schedules.ros(ctx.players[i]),
+            ctx.schedules.playoffs(ctx.players[i]),
+        )
+        for i in ids
+    ]
 
 
 def roster_choices(ctx: TradeContext, team: Team) -> list[TradeRow]:
