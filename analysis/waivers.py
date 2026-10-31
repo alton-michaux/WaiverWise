@@ -1,7 +1,8 @@
 """Rank free agents by how much they improve *your* optimal lineup.
 
 Gain is measured after dropping your most expendable player (when the roster is full),
-so a free agent only scores if he'd actually start for you at some point.
+so a free agent only scores if he'd actually start for you at some point. Kickers and D/STs
+only swap for their own position; everyone else shares one pool.
 
 Every lineup also has access to "streamers": phantom players worth the Nth-best free agent
 at each position each week. Covering a bye only counts if a player beats what you could
@@ -43,12 +44,13 @@ class WaiverTarget:
 
 @dataclass
 class WaiverReport:
-    drop_id: int | None  # most expendable player overall; None when there's an open roster spot
+    drop_id: int | None  # most expendable player in the pool; None when there's an open roster spot
     drop_cost: float  # ROS lineup points lost by dropping him
     targets: list[WaiverTarget]
 
 
 STREAMER_RANK = 3  # assume the top couple of free agents get claimed by someone else
+SPECIALISTS = {"K", "D/ST"}  # nobody gives up a real player for one, or the reverse
 
 
 def streamers(free_agents: list[WeeklyPlayer], weeks: range, rank: int = STREAMER_RANK) -> list[WeeklyPlayer]:
@@ -71,6 +73,20 @@ def roster_capacity(slots: dict[str, int]) -> int:
     return sum(n for slot, n in slots.items() if slot != "IR")
 
 
+def _drop_pool(position: str | None) -> str | None:
+    return position if position in SPECIALISTS else None
+
+
+def _cheapest_in_pool(season: SeasonEvaluator, players: frozenset, locked: frozenset, position: str | None):
+    """Cheapest drop among players who share `position`'s pool."""
+    pool = _drop_pool(position)
+    others = frozenset(p for p in players if _drop_pool(p.position) != pool)
+    # nobody in the pool to swap (e.g. no kicker rostered), so a spot has to come from somewhere
+    if players <= locked | others:
+        others = frozenset()
+    return season.cheapest_drop(players, locked | others)
+
+
 def evaluate(
     roster: list[WeeklyPlayer],
     free_agents: list[WeeklyPlayer],
@@ -78,11 +94,13 @@ def evaluate(
     weeks: range,
     baseline: list[WeeklyPlayer] = (),
     protected: set[int] = frozenset(),
+    position: str | None = None,
 ) -> WaiverReport:
     """`roster` should exclude IR-slotted players; they don't use a roster spot.
 
     `baseline` players (see `streamers`) are available to every lineup without a roster spot.
     `protected` player ids are never chosen as the drop (e.g. already in a pending move).
+    `position` picks the pool for the report-wide drop; each target's drop follows its own position.
     """
     season = SeasonEvaluator(slots, weeks, baseline)
     base = frozenset(roster)
@@ -94,7 +112,7 @@ def evaluate(
 
     drop, drop_cost = None, 0.0
     if full:
-        drop, cost = season.cheapest_drop(base, locked)
+        drop, cost = _cheapest_in_pool(season, base, locked, position)
         drop_cost = round(cost, 2)
 
     targets = []
@@ -103,7 +121,7 @@ def evaluate(
         fa_drop = None
         if full:
             # the best drop depends on who's added: a new kicker should replace the old kicker
-            fa_drop, _ = season.cheapest_drop(with_fa, locked | {fa})
+            fa_drop, _ = _cheapest_in_pool(season, with_fa, locked | {fa}, fa.position)
             with_fa = with_fa - {fa_drop}
         targets.append(
             WaiverTarget(
