@@ -357,6 +357,7 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
         weeks,
         baseline=streamers(fa_weekly, weeks),
         protected=set(pending),
+        position=position,
     )
     values = vorp(
         [PlayerValue(p.pk, p.position, ros_points(p)) for p in players if p.pk in rostered or p in free_agents],

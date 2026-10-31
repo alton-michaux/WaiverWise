@@ -124,6 +124,21 @@ def test_open_roster_spot_is_explained(signed_in, mine, means):
     assert "Open roster spot" in html
 
 
+def test_kicker_pickup_replaces_your_kicker(signed_in, mine, means):
+    mine.league.lineup_slots = {"WR": 1, "K": 1, "BE": 1}
+    mine.league.save()
+    rostered(mine, "WR", 1, "Starter")
+    rostered(mine, "BE", 2, "Bench Guy")
+    RosterEntry.objects.create(team=mine, player=add(3, "My Kicker", position="K"), lineup_slot="K")
+    add(4, "New Kicker", position="K", fa_status="FREEAGENT")
+    means.update({"Starter": 10.0, "Bench Guy": 2.0, "My Kicker": 8.0, "New Kicker": 12.0})
+
+    assert "Safe to drop: Bench Guy." in signed_in.get("/waivers/").content.decode()
+    html = signed_in.get("/waivers/", {"position": "K"}).content.decode()
+    assert "Drop My Kicker" in html
+    assert "Cheapest drop: My Kicker" in html
+
+
 def test_team_with_no_players_renders(signed_in, mine, means):
     assert signed_in.get("/waivers/").status_code == 200
 

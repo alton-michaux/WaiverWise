@@ -37,7 +37,8 @@ never as a reason to expect more or less than it.
 Glossary: proj/floor/ceiling = projected points and 10th/90th percentile outcomes. ROS = rest of season. \
 VORP = rest-of-season points over a replacement-level player at the position. "ROS gain" = how many more points \
 the user's optimal lineup scores over the rest of the season with a move, compared against streaming the \
-3rd-best free agent each week. Win % comes from 10,000 simulated matchups against the opponent's best lineup. \
+3rd-best free agent each week. Kickers and D/STs only swap for the user's own kicker or D/ST, and other positions \
+never for them, unless the user has none to swap. Win % comes from 10,000 simulated matchups against the opponent's best lineup. \
 matchup = Good or Tough when the opponent is among the 8 softest or toughest defenses against that position, adjusted \
 for offenses faced; it's noisy, and missing means unremarkable or too few games. team_implied_total = points the betting \
 lines imply for the player's team. team_spread = negative when that team is favored. ros_schedule and playoff_schedule = Good or Tough when the player's \
