@@ -23,6 +23,25 @@ class Projection(models.Model):
         ]
 
 
+class ProjectionSnapshot(models.Model):
+    """What we projected for a week, frozen at kickoff. ESPN drops past projections, so this can't be backfilled."""
+
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="projection_snapshots")
+    season = models.PositiveSmallIntegerField()
+    week = models.PositiveSmallIntegerField()
+    espn = models.FloatField(null=True)
+    sleeper = models.FloatField(null=True)
+    mean = models.FloatField()
+    sd = models.FloatField()
+    opponent = models.CharField(max_length=10, blank=True)
+    captured_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["player", "season", "week"], name="uniq_projection_snapshot")
+        ]
+
+
 class Usage(models.Model):
     """Weekly opportunity from nflverse: the leading indicator for waiver risers."""
 

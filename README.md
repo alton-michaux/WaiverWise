@@ -79,7 +79,7 @@ GitHub cron uses UTC and can run a few minutes late when GitHub is busy.
 ### Free-tier tradeoffs
 
 - **Cold starts:** the free web service sleeps after 15 minutes without traffic, and waking takes about a minute. The installed app shows your last-seen copy of a page after 4 seconds while the server wakes.
-- **Database expiry:** Render's free Postgres expires 30 days after creation, and is deleted after a 14-day grace period. League data re-syncs in a minute, but accounts and cached explanations would be lost. Upgrade or move the database before then.
+- **Database expiry:** Render's free Postgres expires 30 days after creation, and is deleted after a 14-day grace period. League data re-syncs in a minute, but accounts, cached explanations, and projection snapshots would be lost, and snapshots can't be rebuilt. Upgrade or move the database (`pg_dump`, then restore) before then.
 
 ### Install on your phone
 
