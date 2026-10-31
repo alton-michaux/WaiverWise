@@ -3,19 +3,54 @@ import polars as pl
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from analysis.matchups import implied_totals
 from league.bulk import upsert
 from league.models import League, Player
-from nfl.ids import update_crosswalk
-from nfl.models import Usage
+from nfl.ids import espn_team, update_crosswalk
+from nfl.models import GameLine, Usage
 
 
 class Command(BaseCommand):
-    help = "Update the ESPN/Sleeper/nflverse id crosswalk and weekly usage from nflverse."
+    help = "Update the ESPN/Sleeper/nflverse id crosswalk, weekly usage and game lines from nflverse."
 
     def handle(self, *args, **opts):
         self.stdout.write(f"crosswalk: {update_crosswalk()} players matched")
         season = League.objects.latest("season").season
         self.stdout.write(f"usage: {self._usage(season)} player-weeks")
+        self.stdout.write(f"lines: {self._lines(season)} team-games")
+
+    @transaction.atomic
+    def _lines(self, season: int) -> int:
+        schedule = nflreadpy.load_schedules(season).filter(pl.col("game_type") == "REG")
+        lines = []
+        for g in schedule.iter_rows(named=True):
+            total, spread = g["total_line"], g["spread_line"]
+            home_implied, away_implied = implied_totals(total, spread)
+            neutral = g["location"] == "Neutral"
+            for team, is_home, implied, team_spread, rest in (
+                (g["home_team"], True, home_implied, -spread if spread is not None else None, g["home_rest"]),
+                (g["away_team"], False, away_implied, spread, g["away_rest"]),
+            ):
+                lines.append(
+                    GameLine(
+                        season=season,
+                        week=g["week"],
+                        team=espn_team(team),
+                        is_home=None if neutral else is_home,
+                        spread=team_spread,
+                        total=total,
+                        implied_total=implied,
+                        rest_days=rest,
+                        roof=g["roof"] or "",
+                    )
+                )
+        upsert(
+            GameLine,
+            lines,
+            unique_fields=["season", "week", "team"],
+            update_fields=["is_home", "spread", "total", "implied_total", "rest_days", "roof"],
+        )
+        return len(lines)
 
     @transaction.atomic
     def _usage(self, season: int) -> int:

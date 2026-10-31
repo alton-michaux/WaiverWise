@@ -8,6 +8,7 @@ from django.conf import settings
 from django.db.models import Q
 
 from analysis.lineup import NON_STARTING
+from analysis.matchups import Rating
 from analysis.projections import Projection
 from analysis.startsit import Recommendation, RosterSpot, recommend
 from analysis.trends import Trend, UsageWeek, trend
@@ -17,7 +18,8 @@ from analysis.value import PlayerValue, vorp
 from analysis.waivers import WeeklyPlayer, evaluate, roster_capacity, streamers
 from league.models import League, Matchup, PendingMove, Player, ProGame, RosterEntry, Team
 from nfl.consensus import game_started, remaining_weeks, week_kickoffs, weekly_projections
-from nfl.models import Usage
+from nfl.matchups import defense_ratings
+from nfl.models import GameLine, Usage
 
 BAR_SCALE_POINTS = 40  # a full-width range bar on the lineup
 
@@ -33,6 +35,8 @@ class PlayerRow:
     opponent: str
     locked: bool
     pending: str = ""
+    matchup: Rating | None = None
+    line: GameLine | None = None
 
     @property
     def bar(self) -> dict | None:
@@ -109,10 +113,20 @@ def roster_spots(team: Team, week: int) -> tuple[list[RosterSpot], dict[int, Pla
     return spots, rows
 
 
+def add_matchups(rows: dict[int, PlayerRow], league: League, week: int) -> None:
+    """Display context only. Kept out of roster_spots so the recommendation can't depend on it."""
+    ratings = defense_ratings(league)
+    lines = {line.team: line for line in GameLine.objects.filter(season=league.season, week=week)}
+    for row in rows.values():
+        row.matchup = ratings.get((row.opponent, row.player.position))
+        row.line = lines.get(row.player.pro_team)
+
+
 def start_sit(team: Team, mode: str = "mean") -> dict:
     league = team.league
     week = league.current_week
     spots, rows = roster_spots(team, week)
+    add_matchups(rows, league, week)
     opponent = opponent_of(team, week)
     opp_spots = roster_spots(opponent, week)[0] if opponent else None
     rec: Recommendation = recommend(spots, league.lineup_slots, opp_spots, mode)
