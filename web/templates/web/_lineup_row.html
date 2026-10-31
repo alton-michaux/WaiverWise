@@ -3,7 +3,7 @@
   <div class="row-slot">{{ row.slot|slot_label }}</div>
   <div class="row-main">
     <div class="row-name">
-      {{ row.player.name }}
+      {% include "web/_player_link.html" with pk=row.player.pk name=row.player.name %}
       {% if row.slot in non_starting and best not in non_starting %}<span class="tag tag-in">Start</span>{% elif row.slot not in non_starting and best in non_starting %}<span class="tag tag-out">Bench</span>{% endif %}
       {% if row.player.injury_status and row.player.injury_status != "ACTIVE" %}<span class="tag tag-warn">{{ row.player.injury_status|status_label }}</span>{% endif %}
       {% if row.locked %}<span class="tag">Locked</span>{% endif %}

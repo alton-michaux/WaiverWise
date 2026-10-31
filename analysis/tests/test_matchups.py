@@ -1,6 +1,17 @@
 import pytest
 
-from analysis.matchups import GOOD, MIN_GAMES, NEUTRAL, PRIOR_GAMES, TOUGH, GameScore, implied_totals, ratings
+from analysis.matchups import (
+    GOOD,
+    MIN_GAMES,
+    NEUTRAL,
+    PRIOR_GAMES,
+    TOUGH,
+    GameScore,
+    Rating,
+    implied_totals,
+    ratings,
+    schedule_ratings,
+)
 
 
 def game(week, offense, defense, points, position="WR"):
@@ -78,3 +89,35 @@ def test_implied_totals_when_the_home_team_is_the_underdog():
 @pytest.mark.parametrize("total,spread", [(None, 3.0), (48.5, None), (None, None)])
 def test_implied_totals_need_both_lines(total, spread):
     assert implied_totals(total, spread) == (None, None)
+
+
+RATED = {
+    ("SOFT", "WR"): Rating(4.0, 1, GOOD),
+    ("MID", "WR"): Rating(0.0, 2, NEUTRAL),
+    ("HARD", "WR"): Rating(-4.0, 3, TOUGH),
+    ("HARD", "RB"): Rating(4.0, 1, GOOD),
+}
+
+
+def test_schedule_averages_the_opponents_ratings():
+    result = schedule_ratings({"A": ["SOFT", "MID"]}, "WR", RATED)
+    assert result["A"].points == 2.0
+
+
+def test_schedule_counts_an_unrated_opponent_as_average():
+    assert schedule_ratings({"A": ["SOFT", "NEW"]}, "WR", RATED)["A"].points == 2.0
+
+
+def test_schedule_is_graded_against_other_teams():
+    opponents = {"EASY": ["SOFT"], "B": ["MID"], "C": ["MID"], "HARDEST": ["HARD"]}
+    result = schedule_ratings(opponents, "WR", RATED)
+    assert (result["EASY"].grade, result["B"].grade, result["HARDEST"].grade) == (GOOD, NEUTRAL, TOUGH)
+    assert (result["EASY"].rank, result["HARDEST"].rank) == (1, 4)
+
+
+def test_schedule_depends_on_position():
+    assert schedule_ratings({"A": ["HARD"]}, "RB", RATED)["A"].points == 4.0
+
+
+def test_team_with_no_games_has_no_schedule_rating():
+    assert "A" not in schedule_ratings({"A": []}, "WR", RATED)

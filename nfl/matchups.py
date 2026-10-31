@@ -10,6 +10,15 @@ from analysis.matchups import GameScore, Rating, ratings
 from league.models import League, PlayerWeek, ProGame
 
 
+def upcoming_opponents(league: League, weeks: range) -> dict[str, list[str]]:
+    """Pro team -> its opponents over `weeks`, in order. Byes just aren't listed."""
+    opponents = defaultdict(list)
+    games = ProGame.objects.filter(season=league.season, week__in=weeks).order_by("week")
+    for team, opponent in games.values_list("team", "opponent"):
+        opponents[team].append(opponent)
+    return opponents
+
+
 def defense_ratings(league: League) -> dict[tuple[str, str], Rating]:
     """(defense, position) -> Rating, from completed weeks only.
 

@@ -1,3 +1,5 @@
+import pytest
+
 from analysis.projections import Projection
 from analysis.trends import UsageWeek, trend
 from analysis.waivers import WeeklyPlayer, evaluate, streamers
@@ -77,3 +79,10 @@ def test_drop_is_chosen_per_free_agent():
     assert report.drop_id == 3  # overall most expendable
     assert report.targets[0].drop_id == 2  # but adding a K should replace the old K
     assert report.targets[0].ros_gain == 6
+
+
+def test_trend_averages_recent_shares_and_skips_missing():
+    weeks = [UsageWeek(1, None, 3, 0, 0.9, 0.9)] + [UsageWeek(w, None, 3, 0, 0.2, None) for w in range(2, 5)]
+    t = trend(weeks)
+    assert t.recent_target_share == pytest.approx(0.2)
+    assert t.recent_air_yards_share is None
