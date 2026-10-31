@@ -10,6 +10,7 @@ import json
 import anthropic
 from django.conf import settings
 
+from analysis.matchups import NEUTRAL
 from web.models import Explanation
 
 MAX_TOKENS = 16000
@@ -29,12 +30,20 @@ citing the specific numbers.
 pending moves.
 - For trades, the user is the proposer: say whether to offer it, and how the partner's own gain or loss \
 affects the odds they accept. Don't tell the user to "accept" a trade they would be sending.
+- Projections already account for the opponent. Use matchup grades and betting lines to explain a projection, \
+never as a reason to expect more or less than it.
 - Keep it under 180 words. Plain text: short paragraphs and "- " bullets, no headings, no markdown emphasis.
 
 Glossary: proj/floor/ceiling = projected points and 10th/90th percentile outcomes. ROS = rest of season. \
 VORP = rest-of-season points over a replacement-level player at the position. "ROS gain" = how many more points \
 the user's optimal lineup scores over the rest of the season with a move, compared against streaming the \
-3rd-best free agent each week. Win % comes from 10,000 simulated matchups against the opponent's best lineup."""
+3rd-best free agent each week. Kickers and D/STs only swap for the user's own kicker or D/ST, and other positions \
+never for them, unless the user has none to swap. Win % comes from 10,000 simulated matchups against the opponent's best lineup. \
+matchup = Good or Tough when the opponent is among the 8 softest or toughest defenses against that position, adjusted \
+for offenses faced; it's noisy, and missing means unremarkable or too few games. team_implied_total = points the betting \
+lines imply for the player's team. team_spread = negative when that team is favored. ros_schedule and playoff_schedule = Good or Tough when the player's \
+team has one of the 8 softest or toughest remaining schedules at that position, or in the fantasy playoff weeks; missing \
+means unremarkable. ROS points already reflect these, so they explain the number rather than add to it."""
 
 
 class NarrationError(Exception):
@@ -107,6 +116,25 @@ def _player(p):
     return out
 
 
+def _game_context(row) -> dict:
+    out = {}
+    if row.matchup and row.matchup.grade != NEUTRAL:
+        out["matchup"] = row.matchup.grade
+    if row.line and row.line.implied_total is not None:
+        out["team_implied_total"] = row.line.implied_total
+        out["team_spread"] = row.line.spread
+    return out
+
+
+def _schedules(row) -> dict:
+    out = {}
+    if row.ros_schedule and row.ros_schedule.grade != NEUTRAL:
+        out["ros_schedule"] = row.ros_schedule.grade
+    if row.playoff_schedule and row.playoff_schedule.grade != NEUTRAL:
+        out["playoff_schedule"] = row.playoff_schedule.grade
+    return out
+
+
 def startsit_payload(ctx: dict) -> dict:
     rec = ctx["rec"]
     return {
@@ -126,6 +154,7 @@ def startsit_payload(ctx: dict) -> dict:
                 "slot": row.slot,
                 "best_slot": best,
                 "opponent": row.opponent,
+                **_game_context(row),
                 "projection": _proj(row.projection),
                 **({"game_started": True} if row.locked else {}),
                 **({"pending_move": row.pending} if row.pending else {}),
@@ -157,6 +186,7 @@ def waivers_payload(ctx: dict) -> dict:
                 "this_week_gain": r.next_week_gain,
                 "ros_gain": r.ros_gain,
                 "drop_for_this_add": r.drop.name if r.drop else "open roster spot",
+                **_schedules(r),
                 **(
                     {
                         "opportunities_per_game_last3": r.trend.recent_opportunities,
@@ -178,7 +208,7 @@ def trade_payload(ctx: dict) -> dict:
     t = result["trade"]
 
     def rows(trade_rows):
-        return [{**_player(r.player), "ros_points": r.ros_points} for r in trade_rows]
+        return [{**_player(r.player), "ros_points": r.ros_points, **_schedules(r)} for r in trade_rows]
 
     return {
         "situation": (

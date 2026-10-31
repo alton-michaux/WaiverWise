@@ -1,0 +1,1 @@
+<button type="button" class="{{ link_class|default:"player-link" }}" data-open-dialog="player-sheet" aria-haspopup="dialog" hx-get="{% url 'player_sheet' pk %}" hx-target="#player-sheet-body">{{ name }}</button>

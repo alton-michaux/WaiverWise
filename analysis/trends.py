@@ -12,6 +12,8 @@ class UsageWeek:
     snap_pct: float | None
     targets: int
     carries: int
+    target_share: float | None = None
+    air_yards_share: float | None = None
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,8 @@ class Trend:
     opportunity_change: float  # vs earlier games
     recent_snap_pct: float | None
     snap_pct_change: float | None
+    recent_target_share: float | None = None
+    recent_air_yards_share: float | None = None
 
 
 def _avg(values):
@@ -43,4 +47,6 @@ def trend(weeks: list[UsageWeek]) -> Trend | None:
         snap_pct_change=(
             recent_snaps - earlier_snaps if recent_snaps is not None and earlier_snaps is not None else None
         ),
+        recent_target_share=_avg([w.target_share for w in recent]),
+        recent_air_yards_share=_avg([w.air_yards_share for w in recent]),
     )
