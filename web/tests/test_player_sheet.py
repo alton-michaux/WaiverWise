@@ -133,3 +133,14 @@ def test_unknown_player_is_a_404(signed_in):
 
 def test_sheet_requires_login(client, receiver):
     assert client.get(f"/player/{receiver.pk}/").status_code == 302
+
+
+def test_schedule_grades_are_per_position_and_stretch(league, receiver):
+    ProGame.objects.create(season=SEASON, week=15, team="NE", opponent="SOFT")
+    ratings = {("O15", "WR"): Rating(-5.0, 32, TOUGH), ("SOFT", "WR"): Rating(5.0, 1, GOOD)}
+    grades = services.ScheduleGrades(league)
+    grades.ratings = ratings
+    assert grades.playoffs(receiver).points < 0
+    other = Player(position="WR", pro_team="NE")
+    assert grades.playoffs(other).points == 5.0
+    assert grades.playoffs(Player(position="RB", pro_team="NE")).points == 0.0
