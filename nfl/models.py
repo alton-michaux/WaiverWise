@@ -34,12 +34,32 @@ class ProjectionSnapshot(models.Model):
     mean = models.FloatField()
     sd = models.FloatField()
     opponent = models.CharField(max_length=10, blank=True)
+    # saved rather than joined later: both change through the season and can't be rebuilt as of this week
+    opp_rating = models.FloatField(null=True)
+    implied_total = models.FloatField(null=True)
     captured_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["player", "season", "week"], name="uniq_projection_snapshot")
         ]
+
+
+class GameLine(models.Model):
+    """One team's side of a game from nflverse. Betting lines only exist about a week ahead."""
+
+    season = models.PositiveSmallIntegerField()
+    week = models.PositiveSmallIntegerField()
+    team = models.CharField(max_length=10)  # ESPN code, to match ProGame
+    is_home = models.BooleanField(null=True)  # None = neutral site
+    spread = models.FloatField(null=True)  # relative to this team; negative = favored
+    total = models.FloatField(null=True)
+    implied_total = models.FloatField(null=True)
+    rest_days = models.PositiveSmallIntegerField(null=True)
+    roof = models.CharField(max_length=10, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["season", "week", "team"], name="uniq_game_line")]
 
 
 class Usage(models.Model):

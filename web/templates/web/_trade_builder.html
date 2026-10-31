@@ -13,6 +13,10 @@
       {% elif t.b.gain > 0 %}This helps {{ partner.name }} more than you. Pass.
       {% else %}Neither lineup improves.{% endif %}
     </p>
+    <ul class="deal-players">
+      {% for r in result.a_gets %}{% include "web/_deal_player.html" with side="Get" side_class="move-in" pk=r.player.pk name=r.player.name ros=r.ros_schedule.grade playoffs=r.playoff_schedule.grade %}{% endfor %}
+      {% for r in result.a_gives %}{% include "web/_deal_player.html" with side="Give" side_class="move-out" pk=r.player.pk name=r.player.name ros=r.ros_schedule.grade playoffs=r.playoff_schedule.grade %}{% endfor %}
+    </ul>
     {% if result.a_dropped %}<p class="muted">You'd need to drop: {% for r in result.a_dropped %}{{ r.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
     {% if result.b_dropped %}<p class="muted">They'd need to drop: {% for r in result.b_dropped %}{{ r.player.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
     {% include "web/_explain_button.html" with kind="trade" label="Why this verdict?" button_class="link-button" %}

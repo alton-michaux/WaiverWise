@@ -80,6 +80,14 @@
     </a>
   </nav>
   {% endif %}
+  {% if user.is_authenticated %}
+  <dialog id="player-sheet" class="sheet" aria-label="Player details">
+    <article>
+      <div id="player-sheet-body"></div>
+      <button type="button" class="secondary outline" data-close-dialog>Close</button>
+    </article>
+  </dialog>
+  {% endif %}
   <script>
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("{% url 'service_worker' %}");
 
@@ -94,7 +102,12 @@
     };
     document.addEventListener("click", (e) => {
       const opener = e.target.closest?.("[data-open-dialog]");
-      if (opener) document.getElementById(opener.dataset.openDialog)?.showModal();
+      if (opener) {
+        const sheet = document.getElementById(opener.dataset.openDialog);
+        // the shared sheet still holds the last player; don't show it while this one loads
+        if (opener.hasAttribute("hx-get")) sheet?.querySelector("#player-sheet-body").replaceChildren(Object.assign(document.createElement("p"), { className: "muted", textContent: "Loading…" }));
+        sheet?.showModal();
+      }
       // the dialog element itself only gets the click on its backdrop
       if (e.target.matches?.("dialog") || e.target.closest?.("[data-close-dialog]")) e.target.closest("dialog").close();
 

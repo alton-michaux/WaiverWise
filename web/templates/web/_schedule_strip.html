@@ -1,0 +1,8 @@
+<div class="strip">
+  {% for s in weeks %}
+    <div{% if s.grade %} class="grade-{{ s.grade }}"{% endif %}>
+      <small>W{{ s.week }}</small>
+      {% if s.opponent %}{% if s.is_home is False %}@{% endif %}{{ s.opponent }}<small>{% if s.grade == "Neutral" %}Avg{% else %}{{ s.grade }}{% endif %}</small>{% else %}BYE<small>&nbsp;</small>{% endif %}
+    </div>
+  {% endfor %}
+</div>

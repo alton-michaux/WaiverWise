@@ -6,6 +6,7 @@ from django.views.decorators.cache import cache_control
 from django.shortcuts import get_object_or_404, redirect, render
 
 from analysis.startsit import MODES
+from league.models import Player
 from nfl.consensus import remaining_weeks
 from web import deals, narrate, services
 
@@ -130,6 +131,12 @@ def best_deals(request):
     partner_id = request.GET.get("partner")
     partner = get_object_or_404(league.teams.exclude(pk=team.pk), espn_id=partner_id) if partner_id else None
     return render(request, "web/_best_deals.html", {"best": deals.best_deals(team, partner)})
+
+
+def player_sheet(request, pk):
+    """HTMX partial: the detail behind a player's row, loaded when the sheet opens."""
+    league = services.current_league()
+    return render(request, "web/_player_sheet.html", services.player_sheet(league, get_object_or_404(Player, pk=pk)))
 
 
 def _startsit_payload(request):

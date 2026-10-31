@@ -3,21 +3,25 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
+from functools import cache
 
 from django.conf import settings
 from django.db.models import Q
 
 from analysis.lineup import NON_STARTING
+from analysis.consistency import Consistency, consistency
+from analysis.matchups import Rating, schedule_ratings
 from analysis.projections import Projection
 from analysis.startsit import Recommendation, RosterSpot, recommend
 from analysis.trends import Trend, UsageWeek, trend
 from analysis import trades
 from analysis.season import SeasonEvaluator
-from analysis.value import PlayerValue, vorp
+from analysis.value import PlayerValue, starters_by_position, vorp
 from analysis.waivers import WeeklyPlayer, evaluate, roster_capacity, streamers
-from league.models import League, Matchup, PendingMove, Player, ProGame, RosterEntry, Team
-from nfl.consensus import game_started, remaining_weeks, week_kickoffs, weekly_projections
-from nfl.models import Usage
+from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from nfl.consensus import game_started, playoff_weeks, remaining_weeks, week_kickoffs, weekly_projections
+from nfl.matchups import defense_ratings, upcoming_opponents
+from nfl.models import GameLine, Usage
 
 BAR_SCALE_POINTS = 40  # a full-width range bar on the lineup
 
@@ -33,6 +37,8 @@ class PlayerRow:
     opponent: str
     locked: bool
     pending: str = ""
+    matchup: Rating | None = None
+    line: GameLine | None = None
 
     @property
     def bar(self) -> dict | None:
@@ -109,10 +115,20 @@ def roster_spots(team: Team, week: int) -> tuple[list[RosterSpot], dict[int, Pla
     return spots, rows
 
 
+def add_matchups(rows: dict[int, PlayerRow], league: League, week: int) -> None:
+    """Display context only. Kept out of roster_spots so the recommendation can't depend on it."""
+    ratings = defense_ratings(league)
+    lines = {line.team: line for line in GameLine.objects.filter(season=league.season, week=week)}
+    for row in rows.values():
+        row.matchup = ratings.get((row.opponent, row.player.position))
+        row.line = lines.get(row.player.pro_team)
+
+
 def start_sit(team: Team, mode: str = "mean") -> dict:
     league = team.league
     week = league.current_week
     spots, rows = roster_spots(team, week)
+    add_matchups(rows, league, week)
     opponent = opponent_of(team, week)
     opp_spots = roster_spots(opponent, week)[0] if opponent else None
     rec: Recommendation = recommend(spots, league.lineup_slots, opp_spots, mode)
@@ -184,6 +200,113 @@ def move_count(team: Team) -> int:
 TREND_POSITIONS = {"QB", "RB", "WR", "TE"}
 SMALLEST_GAIN = 0.05  # anything less displays as +0.0
 
+SHORT_REST_DAYS = 7  # fewer than this is a short week
+BYE_REST_DAYS = 13  # Sunday to the Sunday after next, give or take; a Thursday game before a Sunday one is only 10
+ROOF_LABELS = {"dome": "Dome", "closed": "Roof closed", "open": "Roof open", "outdoors": "Outdoors"}
+
+
+class ScheduleGrades:
+    """Rest-of-season and fantasy playoff schedule grades, built once per request."""
+
+    def __init__(self, league: League):
+        self.ratings = defense_ratings(league)
+        self.opponents = {
+            "ros": upcoming_opponents(league, remaining_weeks(league)),
+            "playoffs": upcoming_opponents(league, playoff_weeks(league)),
+        }
+        self.graded = cache(self._graded)
+
+    def _graded(self, stretch: str, position: str) -> dict[str, Rating]:
+        return schedule_ratings(self.opponents[stretch], position, self.ratings)
+
+    def ros(self, player: Player) -> Rating | None:
+        return self.graded("ros", player.position).get(player.pro_team)
+
+    def playoffs(self, player: Player) -> Rating | None:
+        return self.graded("playoffs", player.position).get(player.pro_team)
+
+
+@dataclass
+class ScheduleWeek:
+    week: int
+    opponent: str | None  # None = bye
+    is_home: bool | None = None
+    grade: str = ""
+
+
+def _consistency(league: League, player: Player) -> tuple[Consistency | None, int]:
+    """The player's game log against what the league starts at that position, and how many that is."""
+    rows = list(
+        PlayerWeek.objects.filter(season=league.season, week__lt=league.current_week)
+        .exclude(breakdown={})  # empty breakdown = didn't play
+        .values_list("player_id", "player__position", "week", "points")
+    )
+    totals = defaultdict(float)
+    weekly = defaultdict(list)
+    history = {}
+    for pid, position, week, points in rows:
+        totals[(pid, position)] += points or 0
+        if position == player.position:
+            weekly[week].append(points or 0)
+        if pid == player.pk:
+            history[week] = points or 0
+    # season so far stands in for rest of season: it only decides who fills the flex spots
+    pool = [PlayerValue(pid, position, total) for (pid, position), total in totals.items()]
+    starters = starters_by_position(pool, league.lineup_slots, league.team_count).get(player.position, 0)
+    return consistency(history, weekly, starters), starters
+
+
+def player_sheet(league: League, player: Player) -> dict:
+    season, week = league.season, league.current_week
+    weeks = remaining_weeks(league)
+    playoffs = playoff_weeks(league)
+    schedules = ScheduleGrades(league)
+    ratings = schedules.ratings
+    games = dict(
+        ProGame.objects.filter(season=season, team=player.pro_team, week__in=weeks).values_list("week", "opponent")
+    )
+    lines = {line.week: line for line in GameLine.objects.filter(season=season, team=player.pro_team, week__in=weeks)}
+
+    def grade(opponent):
+        rating = ratings.get((opponent, player.position))
+        return rating.grade if rating else ""
+
+    schedule = [
+        ScheduleWeek(w, games[w], lines[w].is_home if w in lines else None, grade(games[w]))
+        if w in games
+        else ScheduleWeek(w, None)
+        for w in weeks
+    ]
+
+    line = lines.get(week)
+    rest = line.rest_days if line else None
+    role = None
+    if player.position in TREND_POSITIONS:
+        usage = Usage.objects.filter(season=season, player=player)
+        role = trend(
+            [UsageWeek(u.week, u.snap_pct, u.targets, u.carries, u.target_share, u.air_yards_share) for u in usage]
+        )
+    games_log, starters = _consistency(league, player)
+    return {
+        "player": player,
+        "week": week,
+        "this_week": schedule[0] if schedule else None,
+        "matchup": ratings.get((games.get(week), player.position)),
+        "line": line,
+        "roof": ROOF_LABELS.get(line.roof, "") if line else "",
+        "short_week": rest is not None and rest < SHORT_REST_DAYS,
+        "off_bye": rest is not None and rest >= BYE_REST_DAYS,
+        "regular_schedule": [s for s in schedule if s.week not in playoffs],
+        "playoff_schedule": [s for s in schedule if s.week in playoffs],
+        "ros_outlook": schedules.ros(player),
+        "playoff_outlook": schedules.playoffs(player),
+        "playoffs": playoffs,
+        "role": role,
+        "consistency": games_log,
+        "starters": starters,
+    }
+
+
 
 @dataclass
 class WaiverRow:
@@ -196,6 +319,8 @@ class WaiverRow:
     trend: Trend | None
     drop: Player | None = None
     pending: str = ""
+    ros_schedule: Rating | None = None
+    playoff_schedule: Rating | None = None
 
     @property
     def helps_this_week(self) -> bool:
@@ -232,6 +357,7 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
         weeks,
         baseline=streamers(fa_weekly, weeks),
         protected=set(pending),
+        position=position,
     )
     values = vorp(
         [PlayerValue(p.pk, p.position, ros_points(p)) for p in players if p.pk in rostered or p in free_agents],
@@ -244,6 +370,7 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
         usage[u.player_id].append(UsageWeek(u.week, u.snap_pct, u.targets, u.carries))
 
     by_id = {p.pk: p for p in players}
+    schedules = ScheduleGrades(league)
     rows = []
     for t in report.targets:
         p = by_id[t.id]
@@ -260,6 +387,8 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
                 trend=trend(usage[p.pk]) if p.position in TREND_POSITIONS else None,
                 drop=by_id.get(t.drop_id),
                 pending=pending.get(p.pk, ""),
+                ros_schedule=schedules.ros(p),
+                playoff_schedule=schedules.playoffs(p),
             )
         )
     # most targets gain nothing; fall back to league-wide value so the list stays useful
@@ -302,6 +431,7 @@ class TradeContext:
         self.season = SeasonEvaluator(league.lineup_slots, self.weeks, streamers(free_agents, self.weeks))
         self.capacity = roster_capacity(league.lineup_slots)
         self.tied_up = tied_up(league)
+        self.schedules = ScheduleGrades(league)
 
     def ros_points(self, pid: int) -> float:
         return round(sum(self.weekly[pid].mean(w) for w in self.weeks), 2)
@@ -327,10 +457,21 @@ class TradeRow:
     player: Player
     ros_points: float
     pending: str = ""
+    ros_schedule: Rating | None = None
+    playoff_schedule: Rating | None = None
 
 
 def trade_rows(ctx: TradeContext, ids: list[int]) -> list[TradeRow]:
-    return [TradeRow(ctx.players[i], ctx.ros_points(i), ctx.tied_up.get(i, "")) for i in ids]
+    return [
+        TradeRow(
+            ctx.players[i],
+            ctx.ros_points(i),
+            ctx.tied_up.get(i, ""),
+            ctx.schedules.ros(ctx.players[i]),
+            ctx.schedules.playoffs(ctx.players[i]),
+        )
+        for i in ids
+    ]
 
 
 def roster_choices(ctx: TradeContext, team: Team) -> list[TradeRow]:
