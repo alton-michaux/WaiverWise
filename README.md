@@ -39,6 +39,10 @@ On start it runs a full sync if data is more than 6 hours old (WSL/Docker may ha
 
 Manual: `docker compose exec web python manage.py sync_all [--only league nfl projections]`.
 
+## Projection accuracy
+
+`sync_all` saves each week's projections until kickoff, because ESPN doesn't keep past ones. `manage.py projection_accuracy` compares them with what happened: mean absolute error per source, and whether matchup rating or implied total still explains the misses. Matchup data only adjusts recommendations if this shows it would help, and it takes a few weeks of snapshots to mean anything.
+
 ## Tests
 
 ```sh

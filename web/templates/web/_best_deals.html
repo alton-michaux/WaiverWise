@@ -42,7 +42,10 @@
             <div><span class="muted">{{ deal.partner.name }}</span><strong class="move-in">{{ deal.them|signed }}</strong><span class="muted">{{ deal.them_before|pts }} → {{ deal.them_after|pts }}</span></div>
           </div>
           <p>Both teams improve: a realistic offer.</p>
-          <p class="deal-players">{% for p in deal.gets %}{% include "web/_player_link.html" with pk=p.id name=p.name link_class="link-button" %}{% endfor %}{% for p in deal.gives %}{% include "web/_player_link.html" with pk=p.id name=p.name link_class="link-button" %}{% endfor %}</p>
+          <ul class="deal-players">
+            {% for p in deal.gets %}{% include "web/_deal_player.html" with side="Get" side_class="move-in" pk=p.id name=p.name ros=p.ros_schedule playoffs=p.playoff_schedule %}{% endfor %}
+            {% for p in deal.gives %}{% include "web/_deal_player.html" with side="Give" side_class="move-out" pk=p.id name=p.name ros=p.ros_schedule playoffs=p.playoff_schedule %}{% endfor %}
+          </ul>
           {% if deal.you_drop %}<p class="muted">You'd need to drop: {% for p in deal.you_drop %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
           {% if deal.them_drop %}<p class="muted">They'd need to drop: {% for p in deal.them_drop %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
           {% include "web/_explain_button.html" with kind="trade" suffix=forloop.counter query=deal.query label="Why this trade?" button_class="link-button" %}
