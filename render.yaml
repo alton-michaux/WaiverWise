@@ -16,8 +16,6 @@ services:
         generateValue: true
       - key: DATABASE_URL
         sync: false
-      - key: ESPN_MY_TEAM_ID  # which team is "yours" in the app
-        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: CLAUDE_MODEL

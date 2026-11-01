@@ -35,6 +35,19 @@
       {% if last_synced %}<small class="sync-age" title="{{ last_synced }}">Synced {{ last_synced|short_age }} ago</small>{% endif %}
       <dialog id="team-sheet" class="sheet" aria-label="Teams and account">
         <article>
+          {% if picker.memberships|length > 1 %}
+          <h3>Leagues</h3>
+          <ul class="sheet-list">
+            {% for m in picker.memberships %}
+            <li>
+              <form method="post" action="{% url 'switch_league' %}" data-clear-pages>{% csrf_token %}
+                <input type="hidden" name="league" value="{{ m.league_id }}">
+                <button type="submit" {% if m.league_id == picker.league.pk %}aria-current="true"{% endif %}><span>{{ m.league.name }}</span><small>{{ m.league.season }}</small></button>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
           {% if picker.teams %}
           <h3>Teams</h3>
           <ul class="sheet-list">
@@ -117,7 +130,12 @@
       if (a.hash && a.pathname === location.pathname && a.search === location.search) return;
       startLoading(a);
     });
-    document.addEventListener("submit", (e) => { if (!e.defaultPrevented) startLoading(e.submitter); });
+    document.addEventListener("submit", (e) => {
+      if (e.defaultPrevented) return;
+      // saved pages are stored by URL, so they'd show the old league under the new one
+      if (e.target.hasAttribute("data-clear-pages")) navigator.serviceWorker?.controller?.postMessage("clear-pages");
+      startLoading(e.submitter);
+    });
     // the back button can restore this page from memory with the indicators still on
     window.addEventListener("pageshow", () => {
       root.classList.remove("navigating");

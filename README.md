@@ -7,13 +7,20 @@ Data: ESPN (league, rosters, scoring, actuals, current-week projections), Sleepe
 ## Setup
 
 ```sh
-cp .env.example .env   # fill in ESPN_LEAGUE_ID, ESPN_S2, ESPN_SWID, ESPN_MY_TEAM_ID, SECRET_KEY
+cp .env.example .env   # fill in ESPN_LEAGUE_ID, ESPN_S2, ESPN_SWID, SECRET_KEY
 docker compose up -d --build
 docker compose exec web python manage.py migrate
 docker compose exec web python manage.py sync_all
 ```
 
-App: http://localhost:8000 (start/sit, waivers, trades). Every page requires sign-in, so create an account first: `docker compose exec web python manage.py createsuperuser`.
+App: http://localhost:8000 (start/sit, waivers, trades). Every page requires sign-in, so create an account and attach it to your team (the `teamId` in your ESPN team page's URL):
+
+```sh
+docker compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py bootstrap_owner <username> <team id>
+```
+
+A user only sees leagues they have a membership in. `bootstrap_owner` sets up your own, and Admin → Memberships handles anyone else or fixes a wrong claim.
 
 `ESPN_S2` / `ESPN_SWID` are cookies from fantasy.espn.com (devtools → Application → Cookies). Compose reads `.env` at container creation, so run `docker compose up -d` after editing it.
 
@@ -61,8 +68,9 @@ CI (`.github/workflows/tests.yml`) runs the suite against Postgres 16 on every P
 
 1. Render dashboard → **New → Blueprint** → pick this repo. It reads `render.yaml`.
 2. Before applying, set `region` in `render.yaml` to your database's region (the hostname in its URL shows it, e.g. `dpg-xxxx-a.ohio-postgres.render.com`; this repo uses `ohio`). The internal database URL only works within the same region.
-3. Fill in the prompted values: `DATABASE_URL` (the database's **Internal** URL), `ANTHROPIC_API_KEY`, and `ESPN_MY_TEAM_ID`. `SECRET_KEY` is generated for you. ESPN cookies aren't needed on Render, since syncs run in GitHub Actions.
+3. Fill in the prompted values: `DATABASE_URL` (the database's **Internal** URL), and `ANTHROPIC_API_KEY`. `SECRET_KEY` is generated for you. ESPN cookies aren't needed on Render, since syncs run in GitHub Actions.
 4. Create an account once it's live: Render dashboard → the service → **Shell**, then `python manage.py createsuperuser`.
+5. After the first sync (step 2), attach the account to your team: `python manage.py bootstrap_owner <username> <team id>`. If the service has no Shell, run it from your machine with `DATABASE_URL` set to the database's external URL. Don't put this in a workflow, since Actions logs are public.
 
 The service deploys from `main` (the default branch). Merging `dev` into `main` is a release.
 
@@ -74,7 +82,7 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 |---|---|
 | `DATABASE_URL` | the database's **External** URL with `?sslmode=require` on the end |
 | `SECRET_KEY` | any random string (`python3 -c 'import secrets; print(secrets.token_urlsafe(50))'`) |
-| `ESPN_LEAGUE_ID`, `ESPN_SEASON`, `ESPN_S2`, `ESPN_SWID`, `ESPN_MY_TEAM_ID` | same values as `.env` |
+| `ESPN_LEAGUE_ID`, `ESPN_SEASON`, `ESPN_S2`, `ESPN_SWID` | same values as `.env` |
 
 Then **Actions → Sync league data → Run workflow** to do the first sync by hand. After that it runs on its own. A failed sync (for example, expired ESPN cookies) fails the workflow and GitHub emails you.
 

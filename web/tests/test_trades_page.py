@@ -1,5 +1,4 @@
 import pytest
-from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.template.loader import render_to_string
 
@@ -34,8 +33,7 @@ def means(monkeypatch):
 
 
 @pytest.fixture
-def league(settings):
-    settings.ESPN_MY_TEAM_ID = 1
+def league():
     return League.objects.create(
         espn_id=1, season=2026, name="L", team_count=3, current_week=16, reg_season_weeks=14, final_week=17,
         lineup_slots={"RB": 1, "WR": 1, "BE": 1},
@@ -63,9 +61,8 @@ def partner(league, means):
 
 
 @pytest.fixture
-def signed_in(client, mine):
-    client.force_login(get_user_model().objects.create_user("u", password="p"))
-    return client
+def signed_in(sign_in, mine):
+    return sign_in(mine)
 
 
 def test_finds_and_stores_a_deal_both_teams_like(mine, partner):
@@ -176,13 +173,14 @@ def test_deal_links_explain_and_builder_to_the_same_trade(signed_in, mine, partn
     assert resp.context["result"] is not None
 
 
-def test_sync_searches_deals_ahead_of_time(mine, partner, monkeypatch):
+def test_sync_searches_deals_ahead_of_time(signed_in,mine, partner, monkeypatch):
     monkeypatch.setattr("league.management.commands.sync_all.STEPS", {})
     call_command("sync_all")
     assert TradeDeals.objects.filter(team=mine).exists()
 
 
-def test_failed_deal_search_does_not_fail_the_sync(mine, partner, monkeypatch):
+def test_failed_deal_search_does_not_fail_the_sync(sign_in, mine, partner, monkeypatch):
+    sign_in(mine)
     monkeypatch.setattr("league.management.commands.sync_all.STEPS", {})
 
     def boom(*args, **kwargs):
@@ -192,9 +190,44 @@ def test_failed_deal_search_does_not_fail_the_sync(mine, partner, monkeypatch):
     call_command("sync_all")
 
 
-def test_refresh_skips_quietly_without_a_team(db, settings):
-    settings.ESPN_MY_TEAM_ID = None
+def test_refresh_skips_quietly_without_a_claimed_team(mine):
     call_command("refresh_best_deals")
+    assert not TradeDeals.objects.exists()
+
+
+def test_refresh_skips_past_seasons(sign_in, mine, partner):
+    old = League.objects.create(espn_id=1, season=2025, name="Old", team_count=2, current_week=18, reg_season_weeks=14)
+    sign_in(Team.objects.create(league=old, espn_id=1, name="Old Team", abbrev="OL"))
+    Team.objects.create(league=old, espn_id=2, name="Old Rival", abbrev="OR")
+    call_command("refresh_best_deals")
+    assert not TradeDeals.objects.exists()
+
+
+def test_refresh_searches_every_claimed_team_only(sign_in, mine, partner, league):
+    unclaimed = Team.objects.create(league=league, espn_id=3, name="Unclaimed", abbrev="UN")
+    sign_in(mine)
+    sign_in(partner, username="other")
+    call_command("refresh_best_deals")
+    searched = set(TradeDeals.objects.values_list("team_id", flat=True))
+    assert searched == {mine.pk, partner.pk}
+    assert unclaimed.pk not in searched
+
+
+@pytest.mark.parametrize("only, searched", [(None, True), (["league", "nfl", "projections"], True), (["league"], False), (["projections"], False)])
+def test_only_full_syncs_refresh_deals(sign_in, mine, partner, monkeypatch, only, searched):
+    monkeypatch.setattr("league.management.commands.sync_all.STEPS", {"league": "x", "nfl": "x", "projections": "x"})
+    called = []
+    real = call_command
+
+    def fake(name, *args, **kwargs):
+        if name == "refresh_best_deals":
+            called.append(name)
+        elif name == "snapshot_projections":
+            real(name, *args, **kwargs)
+
+    monkeypatch.setattr("league.management.commands.sync_all.call_command", fake)
+    call_command("sync_all", only=only)
+    assert bool(called) == searched
 
 
 def grade_schedules(monkeypatch, ros, playoffs):

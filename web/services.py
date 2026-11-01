@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import cache
 
-from django.conf import settings
 from django.db.models import Q
 
 from analysis.lineup import NON_STARTING
@@ -18,7 +17,7 @@ from analysis import trades
 from analysis.season import SeasonEvaluator
 from analysis.value import PlayerValue, starters_by_position, vorp
 from analysis.waivers import WeeklyPlayer, evaluate, roster_capacity, streamers
-from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team, league_players
+from league.models import League, Matchup, Membership, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team, league_players
 from nfl.consensus import game_started, playoff_weeks, remaining_weeks, week_kickoffs, weekly_projections
 from nfl.matchups import defense_ratings, upcoming_opponents
 from nfl.models import GameLine, Usage
@@ -50,21 +49,34 @@ class PlayerRow:
         return {"left": at(p.floor), "width": round(at(p.ceiling) - at(p.floor), 1), "mark": at(p.mean)}
 
 
-def current_league() -> League:
-    return League.objects.latest("season")
+def memberships_of(user) -> list[Membership]:
+    """Newest season first, so someone who hasn't picked lands on a league that's still being played."""
+    if not user.is_authenticated:
+        return []
+    return list(
+        Membership.objects.filter(user=user).select_related("league", "team__league").order_by("-league__season", "pk")
+    )
 
 
-def my_team(league: League) -> Team:
-    return league.teams.get(espn_id=settings.ESPN_MY_TEAM_ID)
+# Named per user and membership so someone else signing in on this browser doesn't inherit the choice.
+def league_cookie(user) -> str:
+    return f"league_{user.pk}"
 
 
-TEAM_COOKIE = "team"
+def team_cookie(membership: Membership) -> str:
+    return f"team_{membership.pk}"
 
 
-def remembered_team(request, league: League) -> Team | None:
-    """The team picked on this page or an earlier one, if it still exists."""
-    team_id = request.GET.get("team") or request.COOKIES.get(TEAM_COOKIE, "")
-    return league.teams.filter(espn_id=team_id).first() if team_id.isdigit() else None
+def active_membership(request, memberships: list[Membership]) -> Membership | None:
+    """The league picked on this device if the user still belongs to it, else their default."""
+    chosen = request.COOKIES.get(league_cookie(request.user), "")
+    return next((m for m in memberships if str(m.league_id) == chosen), memberships[0] if memberships else None)
+
+
+def remembered_team(request, membership: Membership) -> Team | None:
+    """The team picked on this page or an earlier one, if it's still in this league."""
+    team_id = request.GET.get("team") or request.COOKIES.get(team_cookie(membership), "")
+    return membership.league.teams.filter(espn_id=team_id).first() if team_id.isdigit() else None
 
 
 def tied_up(league: League) -> dict[int, str]:

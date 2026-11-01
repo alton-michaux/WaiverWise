@@ -33,7 +33,6 @@ jobs:
       ESPN_SEASON: ${{ secrets.ESPN_SEASON }}
       ESPN_S2: ${{ secrets.ESPN_S2 }}
       ESPN_SWID: ${{ secrets.ESPN_SWID }}
-      ESPN_MY_TEAM_ID: ${{ secrets.ESPN_MY_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 

@@ -1,7 +1,6 @@
 from datetime import timedelta
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from analysis.matchups import Rating
@@ -15,8 +14,7 @@ SLOTS = {"WR": 1, "BE": 1}
 
 
 @pytest.fixture
-def mine(settings):
-    settings.ESPN_MY_TEAM_ID = 1
+def mine():
     league = League.objects.create(
         espn_id=1, season=2026, name="L", team_count=2, current_week=16, reg_season_weeks=14, final_week=17,
         lineup_slots=SLOTS,
@@ -25,9 +23,8 @@ def mine(settings):
 
 
 @pytest.fixture
-def signed_in(client, mine):
-    client.force_login(get_user_model().objects.create_user("u", password="p"))
-    return client
+def signed_in(sign_in, mine):
+    return sign_in(mine)
 
 
 @pytest.fixture

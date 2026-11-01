@@ -43,7 +43,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "web.middleware.MissingLeagueDataMiddleware",
+    "web.middleware.LeagueScopeMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -122,7 +122,6 @@ ESPN_LEAGUE_ID = env.int("ESPN_LEAGUE_ID", default=None)
 ESPN_SEASON = env.int("ESPN_SEASON", default=2026)
 ESPN_S2 = env("ESPN_S2", default=None)
 ESPN_SWID = env("ESPN_SWID", default=None)
-ESPN_MY_TEAM_ID = env.int("ESPN_MY_TEAM_ID", default=None)
 
 # Claude explanations (optional)
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default=None)

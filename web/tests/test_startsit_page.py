@@ -3,7 +3,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from analysis.matchups import Rating
@@ -26,8 +25,7 @@ def add_player(team, slot, espn_id, name, pro_team):
 
 
 @pytest.fixture
-def league(settings):
-    settings.ESPN_MY_TEAM_ID = 1
+def league():
     return League.objects.create(
         espn_id=1, season=2026, name="L", team_count=2, current_week=8, reg_season_weeks=14,
         lineup_slots={"WR": 1, "BE": 1},
@@ -45,9 +43,8 @@ def rival(league):
 
 
 @pytest.fixture
-def signed_in(client, mine):
-    client.force_login(get_user_model().objects.create_user("u", password="p"))
-    return client
+def signed_in(sign_in, mine):
+    return sign_in(mine)
 
 
 @pytest.fixture
