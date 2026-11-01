@@ -39,12 +39,12 @@ def test_kicker_buckets_sum():
 
 def test_dst_uses_overrides_and_buckets():
     stats = {"int": 1, "sack": 3, "pts_allow": 9.6, "yds_allow": 250}
-    assert score(stats, RULES, is_dst=True) == pytest.approx(2 + 3 + 3 + 2)
+    assert score(stats, RULES, position="D/ST") == pytest.approx(2 + 3 + 3 + 2)
 
 
 def test_dst_bucket_rounds_fractional_projection():
     # 27.6 rounds to 28 -> 28-34 bucket
-    assert score({"pts_allow": 27.6}, RULES, is_dst=True) == pytest.approx(-1)
+    assert score({"pts_allow": 27.6}, RULES, position="D/ST") == pytest.approx(-1)
 
 
 def test_dst_stats_ignored_for_players():

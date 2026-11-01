@@ -2,9 +2,11 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from analysis.scoring import unscored_stats
 from league import espn_client
 from league.bulk import upsert
 from league.models import League, LeaguePlayer, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from league.support import check_supported
 
 
 class Command(BaseCommand):
@@ -16,6 +18,8 @@ class Command(BaseCommand):
         data = espn_client.fetch_league(
             settings.ESPN_LEAGUE_ID, settings.ESPN_SEASON, settings.ESPN_S2, settings.ESPN_SWID
         )
+        if problems := check_supported(data):
+            raise CommandError(" ".join(problems))
         with transaction.atomic():
             league = self._save(data)
         self.stdout.write(
@@ -24,6 +28,9 @@ class Command(BaseCommand):
                 f"{len(data.players)} players, {len(data.pending)} pending moves"
             )
         )
+        if missing := unscored_stats(data.scoring):
+            # just a count: these logs are public, and a league's rules are its own business
+            self.stdout.write(f"{len(missing)} scoring rules have no Sleeper projection")
 
     def _save(self, data: espn_client.LeagueData) -> League:
         league, _ = League.objects.update_or_create(

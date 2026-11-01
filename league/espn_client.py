@@ -79,6 +79,7 @@ class LeagueData:
     players: list[PlayerData]
     pro_games: list[ProGameData]
     pending: list[PendingMoveData]
+    scoring_type: str = "H2H_POINTS"
 
 
 def fetch_league(league_id: int, season: int, espn_s2: str | None, swid: str | None) -> LeagueData:
@@ -108,6 +109,7 @@ def fetch_league(league_id: int, season: int, espn_s2: str | None, swid: str | N
         players=players,
         pro_games=_pro_games(pro_schedule),
         pending=_pending_moves(league),
+        scoring_type=settings["scoringSettings"].get("scoringType", ""),
     )
 
 
