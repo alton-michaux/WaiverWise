@@ -1,6 +1,8 @@
 # WaiverWise
 
-Start/sit, waiver, and trade analysis for a private ESPN fantasy football league.
+Start/sit, waiver, and trade analysis for ESPN fantasy football leagues.
+
+Supports head-to-head points leagues with QB, RB, WR, TE, FLEX (`RB/WR`, `WR/TE`, `RB/WR/TE`), superflex (`OP`), D/ST and K slots. Category, roto and IDP leagues are refused at sync. Scoring rules Sleeper can't price, like 40+ yard TD or 300-yard bonuses, count only through the ESPN half of the projection consensus.
 
 Data: ESPN (league, rosters, scoring, actuals, current-week projections), Sleeper (weekly projections for every remaining week, scored with your league's rules), nflverse (id crosswalk, usage).
 

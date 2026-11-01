@@ -8,7 +8,7 @@ player at a position not needed to start anywhere sets that position's replaceme
 from collections import defaultdict
 from dataclasses import dataclass
 
-from analysis.lineup import NON_STARTING
+from analysis.lineup import FLEX_POSITIONS, NON_STARTING, slot_breadth, slot_positions
 
 
 @dataclass(frozen=True)
@@ -31,12 +31,12 @@ def starters_by_position(
     counts = defaultdict(int)
     starting = {s: n for s, n in slots.items() if s not in NON_STARTING}
     for slot, n in starting.items():
-        if "/" not in slot:
+        if slot not in FLEX_POSITIONS:
             counts[slot] += n * team_count
-    for slot, n in starting.items():
-        if "/" not in slot:
+    for slot, n in sorted(starting.items(), key=lambda item: slot_breadth(item[0])):
+        if slot not in FLEX_POSITIONS:
             continue
-        eligible = slot.split("/")
+        eligible = slot_positions(slot)
         for _ in range(n * team_count):
             best = max(
                 (by_pos[pos][counts[pos]] for pos in eligible if counts[pos] < len(by_pos[pos])),

@@ -186,7 +186,7 @@ def explain(request, kind):
     if kind not in EXPLAINERS:
         raise Http404
     try:
-        text, error = narrate.explain(kind, EXPLAINERS[kind](request)), None
+        text, error = narrate.explain(kind, EXPLAINERS[kind](request), request.league), None
     except narrate.NarrationError as e:
         text, error = None, str(e)
     return render(request, "web/_explanation.html", {"text": text, "error": error})

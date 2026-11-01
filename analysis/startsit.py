@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from analysis.lineup import Candidate, optimal, starters
+from analysis.lineup import Candidate, optimal, slot_breadth, starters
 from analysis.projections import Projection
 from analysis.sim import win_probability
 
@@ -94,7 +94,7 @@ def pair_moves(ins: list[RosterSpot], outs: list[RosterSpot]) -> list[tuple[int,
     """
     def options(spot_in):
         fits = [o for o in outs if o.current_slot in spot_in.eligible_slots]
-        return sorted(fits, key=lambda o: "/" in o.current_slot)
+        return sorted(fits, key=lambda o: slot_breadth(o.current_slot))
 
     match: dict[int, int] = {}  # out id -> in id
 

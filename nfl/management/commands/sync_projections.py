@@ -42,7 +42,7 @@ class Command(BaseCommand):
                 season=league.season,
                 week=week,
                 source="sleeper",
-                points=score(row["stats"], league.scoring, is_dst=player.position == "D/ST"),
+                points=score(row["stats"], league.scoring, player.position),
                 opponent=row.get("opponent") or "",
                 stats=row["stats"],
             )

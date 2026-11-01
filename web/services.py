@@ -25,7 +25,7 @@ from nfl.models import GameLine, Usage
 BAR_SCALE_POINTS = 40  # a full-width range bar on the lineup
 
 # display order for lineup slots
-SLOT_ORDER = ["QB", "RB", "WR", "TE", "RB/WR/TE", "OP", "D/ST", "K", "BE", "IR"]
+SLOT_ORDER = ["QB", "RB", "WR", "TE", "RB/WR", "WR/TE", "RB/WR/TE", "OP", "D/ST", "K", "BE", "IR"]
 
 
 @dataclass

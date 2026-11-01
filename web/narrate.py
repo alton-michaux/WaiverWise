@@ -10,15 +10,16 @@ import json
 import anthropic
 from django.conf import settings
 
+from analysis.lineup import NON_STARTING
 from analysis.matchups import NEUTRAL
+from analysis.scoring import rule_points
 from web.models import Explanation
 
 MAX_TOKENS = 16000
 # models that accept server-side refusal fallback; Haiku has none, so don't send it there
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"}
 
-SYSTEM = """You are the analyst inside WaiverWise, a fantasy football tool for a 10-team ESPN redraft league \
-(0.75 PPR, 5-point passing TDs). The tool has already computed every number you see; your job is to explain \
+SYSTEM = """You are the analyst inside WaiverWise, a fantasy football tool for {league}. The tool has already computed every number you see; your job is to explain \
 what they mean for the user's decision, in the voice of a sharp, friendly league-mate.
 
 Rules:
@@ -50,18 +51,33 @@ class NarrationError(Exception):
     """User-facing failure; the message is safe to show on the page."""
 
 
-def explain(kind: str, payload: dict) -> str:
+def league_description(league) -> str:
+    """The rules Claude needs to read the numbers, built from the league's own settings."""
+    rules = league.scoring
+    catch = rule_points(rules, 53) or rule_points(rules, 41)
+    terms = [f"{catch:g} PPR", f"{rule_points(rules, 4, 'QB'):g}-point passing TDs"]
+    te_catch = rule_points(rules, 53, "TE") or rule_points(rules, 41, "TE")
+    if te_catch != catch:
+        terms.append(f"{te_catch:g} points per TE catch")
+    lineup = ", ".join(f"{n} {slot}" for slot, n in sorted(league.lineup_slots.items()) if slot not in NON_STARTING)
+    if "OP" in league.lineup_slots:
+        lineup += " (OP is a superflex: it can start a QB, RB, WR or TE)"
+    return f"a {league.team_count}-team ESPN league ({', '.join(terms)}) starting {lineup}"
+
+
+def explain(kind: str, payload: dict, league) -> str:
     body = json.dumps(payload, sort_keys=True, default=str)
-    key = hashlib.sha256(f"{settings.CLAUDE_MODEL}:{kind}:{body}".encode()).hexdigest()
+    description = league_description(league)
+    key = hashlib.sha256(f"{settings.CLAUDE_MODEL}:{kind}:{description}:{body}".encode()).hexdigest()
     if cached := Explanation.objects.filter(key=key).first():
         return cached.text
 
-    text = _ask_claude(kind, body)
+    text = _ask_claude(kind, body, description)
     Explanation.objects.update_or_create(key=key, defaults={"kind": kind, "text": text})
     return text
 
 
-def _ask_claude(kind: str, body: str) -> str:
+def _ask_claude(kind: str, body: str, description: str) -> str:
     if not settings.ANTHROPIC_API_KEY:
         raise NarrationError("Set ANTHROPIC_API_KEY in .env (then `docker compose up -d`) to enable explanations.")
     # user-level keys (sk-ant-usr-...) must name a workspace on every request
@@ -76,7 +92,7 @@ def _ask_claude(kind: str, body: str) -> str:
         response = client.beta.messages.create(
             model=model,
             max_tokens=MAX_TOKENS,
-            system=SYSTEM,
+            system=SYSTEM.format(league=description),
             # narration of precomputed numbers doesn't need deep reasoning
             output_config={"effort": "low"},
             messages=[{"role": "user", "content": f"Explain this {kind} analysis:\n\n{body}"}],
