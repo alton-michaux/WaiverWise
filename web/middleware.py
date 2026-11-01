@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.db import connection
 from django.http import JsonResponse
 from django.shortcuts import render
 
@@ -13,6 +12,9 @@ class HealthCheckMiddleware:
 
     Platform checks can hit the container directly, so their Host header isn't the public
     hostname and Django would reject them as DisallowedHost.
+
+    Doesn't touch the database: frequent checks would stop Neon scaling to zero and use up
+    the free plan's compute hours, and restarting the web service wouldn't fix a database outage.
     """
 
     def __init__(self, get_response):
@@ -21,8 +23,6 @@ class HealthCheckMiddleware:
     def __call__(self, request):
         if request.path != HEALTH_PATH:
             return self.get_response(request)
-        with connection.cursor() as cur:
-            cur.execute("SELECT 1")
         return JsonResponse({"status": "ok"})
 
 

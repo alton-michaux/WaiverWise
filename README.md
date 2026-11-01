@@ -55,13 +55,13 @@ CI (`.github/workflows/tests.yml`) runs the suite against Postgres 16 on every P
 
 - **Web app:** Render free web service (Docker), defined in `render.yaml`. Migrations run when the container starts.
 - **Syncs:** `.github/workflows/sync.yml` runs `sync_all` on a schedule (nightly full sync, every 30 min during game windows, projection refreshes before kickoffs). It replaces the always-on `scheduler` process, which is still used for local dev.
-- **Database:** Render Postgres. Only `DATABASE_URL` is read.
+- **Database:** Neon free Postgres. Only `DATABASE_URL` is read. Always use Neon's **direct** connection string, not the pooled one (no `-pooler` in the hostname): `sync_all` holds a session advisory lock, which transaction pooling breaks.
 
 ### 1. Web service on Render
 
 1. Render dashboard → **New → Blueprint** → pick this repo. It reads `render.yaml`.
-2. Before applying, set `region` in `render.yaml` to your database's region (the hostname in its URL shows it, e.g. `dpg-xxxx-a.ohio-postgres.render.com`; this repo uses `ohio`). The internal database URL only works within the same region.
-3. Fill in the prompted values: `DATABASE_URL` (the database's **Internal** URL), `ANTHROPIC_API_KEY`, and `ESPN_MY_TEAM_ID`. `SECRET_KEY` is generated for you. ESPN cookies aren't needed on Render, since syncs run in GitHub Actions.
+2. Before applying, set `region` in `render.yaml` to the region closest to your Neon database (this repo uses `ohio`).
+3. Fill in the prompted values: `DATABASE_URL` (Neon's direct connection string), `ANTHROPIC_API_KEY`, and `ESPN_MY_TEAM_ID`. `SECRET_KEY` is generated for you. ESPN cookies aren't needed on Render, since syncs run in GitHub Actions.
 4. Create an account once it's live: Render dashboard → the service → **Shell**, then `python manage.py createsuperuser`.
 
 The service deploys from `main` (the default branch). Merging `dev` into `main` is a release.
@@ -72,7 +72,7 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 
 | Secret | Value |
 |---|---|
-| `DATABASE_URL` | the database's **External** URL with `?sslmode=require` on the end |
+| `DATABASE_URL` | Neon's direct connection string, the same value as on Render |
 | `SECRET_KEY` | any random string (`python3 -c 'import secrets; print(secrets.token_urlsafe(50))'`) |
 | `ESPN_LEAGUE_ID`, `ESPN_SEASON`, `ESPN_S2`, `ESPN_SWID`, `ESPN_MY_TEAM_ID` | same values as `.env` |
 
@@ -83,7 +83,26 @@ GitHub cron uses UTC and can run a few minutes late when GitHub is busy.
 ### Free-tier tradeoffs
 
 - **Cold starts:** the free web service sleeps after 15 minutes without traffic, and waking takes about a minute. The installed app shows your last-seen copy of a page after 4 seconds while the server wakes.
-- **Database expiry:** Render's free Postgres expires 30 days after creation, and is deleted after a 14-day grace period. League data re-syncs in a minute, but accounts, cached explanations, and projection snapshots would be lost, and snapshots can't be rebuilt. Upgrade or move the database (`pg_dump`, then restore) before then.
+- **Database limits:** Neon's free plan has 0.5 GB of storage and 100 compute-hours a month, and suspends the database until next month if compute runs out. Set the compute size to the minimum, and check usage in the Neon dashboard after a full game day. `/health/` skips the database so health checks don't keep it awake.
+
+### Moving the database from Render to Neon
+
+League data re-syncs in a minute, but accounts, cached explanations, and projection snapshots can't be rebuilt, so copy the data rather than starting empty.
+
+1. Create a Neon project on the same major Postgres version as the Render database, in the region closest to Ohio. Copy its direct connection string.
+2. Repo → **Actions → Sync league data → ⋯ → Disable workflow**, so no sync writes to the old database after the dump.
+3. Dump and restore, using a client at least as new as the source server:
+
+   ```sh
+   docker run --rm -e SRC="$RENDER_EXTERNAL_URL" -e DST="$NEON_DIRECT_URL" postgres:16-alpine \
+     sh -c 'pg_dump --format=custom --no-owner --no-privileges "$SRC" | pg_restore --no-owner --no-privileges --exit-on-error -d "$DST"'
+   ```
+
+4. Compare row counts for `league_player`, `league_playerweek`, `nfl_projectionsnapshot`, and `auth_user` on both databases.
+5. Set `DATABASE_URL` to the Neon string on Render (this redeploys) and in the Actions secret.
+6. Sign in to the app and check that your pages load, then re-enable the workflow and run it once by hand.
+
+Keep the Render database until a game day has passed cleanly, then delete it.
 
 ### Install on your phone
 

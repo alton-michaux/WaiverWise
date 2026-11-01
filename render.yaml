@@ -1,12 +1,12 @@
 # Render Blueprint for WaiverWise. Dashboard → New → Blueprint → pick this repo.
-# The database already exists, so it isn't declared here; paste its *Internal* URL as DATABASE_URL.
+# The database is on Neon, so it isn't declared here; paste its direct (non-pooled) URL as DATABASE_URL.
 # ESPN league/cookie settings aren't needed here: syncs run in GitHub Actions (.github/workflows/sync.yml).
 services:
   - type: web
     name: waiverwise
     runtime: docker
     plan: free
-    region: ohio              # must match the Render database's region (Ohio) for the internal URL to work
+    region: ohio              # keep close to the Neon database to limit latency
     branch: main              # production tracks main; dev → main PRs are releases
     healthCheckPath: /health/
     envVars:
