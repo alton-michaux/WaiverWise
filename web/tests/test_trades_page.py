@@ -5,7 +5,7 @@ from django.template.loader import render_to_string
 
 from analysis.matchups import Rating
 from analysis.projections import Projection
-from league.models import League, Player, RosterEntry, SyncRun, Team
+from league.models import League, LeaguePlayer, Player, RosterEntry, SyncRun, Team
 from web import deals, services
 from web.models import TradeDeals
 
@@ -16,6 +16,7 @@ def add(team, slot, espn_id, name, position, mean, means):
     player = Player.objects.create(
         espn_id=espn_id, name=name, position=position, pro_team="NYJ", eligible_slots=[position, "BE"]
     )
+    LeaguePlayer.objects.create(league=team.league, player=player)
     RosterEntry.objects.create(team=team, player=player, lineup_slot=slot)
     means[name] = mean
     return player

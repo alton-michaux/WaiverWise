@@ -1,7 +1,7 @@
 """Build matchup ratings from stored league data.
 
-Computed per request rather than stored: the points are in one league's scoring, so a global
-table would have to be undone for multi-league.
+Computed per request rather than stored: the points are in each league's own scoring, so every
+league gets its own ratings.
 """
 
 from collections import defaultdict
@@ -33,7 +33,7 @@ def defense_ratings(league: League) -> dict[tuple[str, str], Rating]:
     }
     totals = defaultdict(float)
     rows = (
-        PlayerWeek.objects.filter(season=season, week__lt=week)
+        PlayerWeek.objects.filter(league=league, season=season, week__lt=week)
         .exclude(breakdown={})  # empty breakdown = didn't play
         .values_list("player__pro_team", "player__position", "week", "points")
     )

@@ -1,11 +1,12 @@
 import logging
 import time
 
+from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
-from league.models import SyncRun
+from league.models import League, SyncRun
 
 log = logging.getLogger(__name__)
 
@@ -57,10 +58,10 @@ class Command(BaseCommand):
                 call_command(command, stdout=self.stdout, stderr=self.stderr)
             except Exception as e:
                 log.exception("sync step %s failed", name)
-                SyncRun.objects.create(step=name, ok=False, error=f"{type(e).__name__}: {e}"[:2000])
+                SyncRun.objects.create(league=self._league_of(name), step=name, ok=False, error=f"{type(e).__name__}: {e}"[:2000])
                 failed.append(name)
                 continue
-            SyncRun.objects.create(step=name, ok=True)
+            SyncRun.objects.create(league=self._league_of(name), step=name, ok=True)
             self.stdout.write(f"[{name}] done in {time.monotonic() - started:.1f}s")
         try:
             call_command("snapshot_projections", stdout=self.stdout, stderr=self.stderr)
@@ -72,7 +73,18 @@ class Command(BaseCommand):
         except Exception:
             # the Trades tab searches on demand when this is missing, so it isn't worth failing the sync
             log.exception("refreshing best deals failed")
-        stale = SyncRun.objects.values_list("pk", flat=True)[KEEP_RUNS:]
-        SyncRun.objects.filter(pk__in=list(stale)).delete()
+        self._prune_runs()
         if failed:
             raise CommandError(f"failed steps: {', '.join(failed)}")
+
+    def _league_of(self, step: str) -> League | None:
+        """Only the league step belongs to one league; the others are shared."""
+        if step != "league":
+            return None
+        return League.objects.filter(espn_id=settings.ESPN_LEAGUE_ID, season=settings.ESPN_SEASON).first()
+
+    def _prune_runs(self):
+        """Keep KEEP_RUNS per league, and per the shared steps, so a busy league can't erase a quiet one's history."""
+        for league_id in SyncRun.objects.order_by().values_list("league_id", flat=True).distinct():
+            stale = SyncRun.objects.filter(league_id=league_id).values_list("pk", flat=True)[KEEP_RUNS:]
+            SyncRun.objects.filter(pk__in=list(stale)).delete()

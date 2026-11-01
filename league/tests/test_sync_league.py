@@ -7,7 +7,7 @@ from django.test.utils import CaptureQueriesContext
 
 from league.espn_client import LeagueData, PendingMoveData, PlayerData, ProGameData, TeamData
 from league.management.commands.sync_league import Command
-from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from league.models import League, LeaguePlayer, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
 
 pytestmark = pytest.mark.django_db
 
@@ -69,7 +69,7 @@ def league_data(points_bump=0.0, injury="ACTIVE"):
 def counts():
     return {
         m.__name__: m.objects.count()
-        for m in (League, Team, Player, PlayerWeek, ProGame, RosterEntry, Matchup, PendingMove)
+        for m in (League, Team, Player, LeaguePlayer, PlayerWeek, ProGame, RosterEntry, Matchup, PendingMove)
     }
 
 
@@ -79,6 +79,7 @@ def test_save_creates_everything():
         "League": 1,
         "Team": 2,
         "Player": N_PLAYERS,
+        "LeaguePlayer": N_PLAYERS,
         "PlayerWeek": N_PLAYERS * len(WEEKS),
         "ProGame": len(WEEKS),
         "RosterEntry": 20,
@@ -103,7 +104,7 @@ def test_players_missing_from_sync_lose_availability():
     Command()._save(league_data())
     data = league_data()
     Command()._save(replace(data, players=[p for p in data.players if p.espn_id != 1030]))
-    assert Player.objects.get(espn_id=1030).fa_status == ""
+    assert LeaguePlayer.objects.get(player__espn_id=1030).fa_status == ""
 
 
 def test_query_count_does_not_scale_with_rows():
