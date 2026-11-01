@@ -2,6 +2,9 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Max, QuerySet
+from django.utils import timezone
+
+from league import credentials
 
 
 class League(models.Model):
@@ -17,6 +20,9 @@ class League(models.Model):
     # {espn_stat_id: points}, e.g. {"53": 1.0} for full PPR
     scoring = models.JSONField(default=dict)
     synced_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    is_public = models.BooleanField(default=False)  # ESPN opens it without cookies
+    has_data = models.BooleanField(default=True)  # False from connecting until the first sync lands
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["espn_id", "season"], name="uniq_league_season")]
@@ -31,6 +37,7 @@ class Team(models.Model):
     name = models.CharField(max_length=200)
     abbrev = models.CharField(max_length=10)
     owners = models.JSONField(default=list)
+    owner_ids = models.JSONField(default=list)  # ESPN member ids, the same value as each owner's SWID cookie
     wins = models.PositiveSmallIntegerField(default=0)
     losses = models.PositiveSmallIntegerField(default=0)
     ties = models.PositiveSmallIntegerField(default=0)
@@ -53,6 +60,7 @@ class Membership(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memberships")
     league = models.ForeignKey(League, on_delete=models.CASCADE, related_name="memberships")
     team = models.OneToOneField(Team, on_delete=models.CASCADE, related_name="membership")
+    last_seen = models.DateTimeField(default=timezone.now)  # at most a day old; leagues nobody opens stop syncing
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "league"], name="uniq_membership")]
@@ -68,6 +76,36 @@ class Membership(models.Model):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
+
+
+class EspnCredential(models.Model):
+    """One member's ESPN cookies for a private league. They're a live login, so they stay encrypted."""
+
+    OK, EXPIRED = "ok", "expired"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="espn_credentials")
+    league = models.ForeignKey(League, on_delete=models.CASCADE, related_name="espn_credentials")
+    encrypted_s2 = models.TextField()
+    encrypted_swid = models.TextField()
+    status = models.CharField(max_length=10, choices=[(OK, "Working"), (EXPIRED, "Expired")], default=OK)
+    last_ok_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "league"], name="uniq_espn_credential")]
+
+    def __str__(self):
+        return f"{self.user} in {self.league}: {self.status}"
+
+    def cookies(self) -> tuple[str, str]:
+        return credentials.decrypt(self.encrypted_s2), credentials.decrypt(self.encrypted_swid)
+
+    def mark_ok(self):
+        self.status, self.last_ok_at = self.OK, timezone.now()
+        self.save(update_fields=["status", "last_ok_at"])
+
+    def mark_expired(self):
+        self.status = self.EXPIRED
+        self.save(update_fields=["status"])
 
 
 class Player(models.Model):
@@ -117,6 +155,11 @@ def active_leagues() -> QuerySet[League]:
     """Every league in the newest season, which is what syncs keep up to date."""
     season = League.objects.aggregate(Max("season"))["season__max"]
     return League.objects.filter(season=season).order_by("pk")
+
+
+def leagues_in_use(cutoff) -> QuerySet[League]:
+    """Active leagues someone has opened since `cutoff`, which are the ones worth syncing."""
+    return active_leagues().filter(memberships__last_seen__gte=cutoff).distinct()
 
 
 class RosterEntry(models.Model):
@@ -187,6 +230,8 @@ class PendingMove(models.Model):
     team_espn_id = models.PositiveSmallIntegerField()
     # [{"player_id", "from_team", "to_team", "type"}] with ESPN ids; team 0 = free agency
     items = models.JSONField(default=list)
+    # whose cookies showed this waiver claim, and the only person who may see it; trades have none
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name="+")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["league", "espn_id"], name="uniq_pending_move")]

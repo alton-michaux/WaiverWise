@@ -1,22 +1,9 @@
 {% extends "web/base.html" %}
-{% block title %}No league yet · WaiverWise{% endblock %}
+{% block title %}Connect a league · WaiverWise{% endblock %}
 {% block content %}
 <article>
-  {% if not user.is_staff %}
-    <h2>You're not in a league yet</h2>
-    <p>Your account is set up, but it isn't connected to a team. Ask the person who invited you to add you.</p>
-  {% elif not has_league %}
-    <h2>No league data yet</h2>
-    <p>The database is set up, but the league hasn't been synced. Run the first sync:</p>
-    <ul>
-      <li><strong>Production:</strong> GitHub → Actions → <em>Sync league data</em> → Run workflow.</li>
-      <li><strong>Locally:</strong> <code>docker compose exec web python manage.py sync_all</code></li>
-    </ul>
-    <p class="muted">After that, scheduled syncs keep it current. A full sync takes about a minute.</p>
-  {% else %}
-    <h2>Your account has no team</h2>
-    <p>Run <code>manage.py bootstrap_owner {{ user.get_username }} &lt;team id&gt;</code>, where the team id is the
-      <code>teamId</code> in your ESPN team page's URL, or add a membership in <a href="{% url 'admin:index' %}">Admin</a>.</p>
-  {% endif %}
+  <h2>You're not in a league yet</h2>
+  <p>Connect your ESPN league to get started. It takes about a minute.</p>
+  <a role="button" href="{% url 'connect' %}">Connect a league</a>
 </article>
 {% endblock %}

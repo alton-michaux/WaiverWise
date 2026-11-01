@@ -115,13 +115,20 @@ LOGGING = {
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": "INFO"},
+    # at INFO these print every request's address, which includes people's ESPN league ids
+    "loggers": {"httpx": {"level": "WARNING"}, "httpcore": {"level": "WARNING"}},
 }
 
 # ESPN league access (private leagues need espn_s2 + SWID cookies)
-ESPN_LEAGUE_ID = env.int("ESPN_LEAGUE_ID", default=None)
 ESPN_SEASON = env.int("ESPN_SEASON", default=2026)
+# only for bootstrap_owner, to attach the first account's cookies. Everyone else connects in the app.
 ESPN_S2 = env("ESPN_S2", default=None)
 ESPN_SWID = env("ESPN_SWID", default=None)
+# encrypts stored ESPN cookies: Fernet keys, newest first, comma-separated so one can be rotated
+CREDENTIAL_KEYS = env.list("CREDENTIAL_KEY", default=[])
+# starts a new league's first sync; a fine-grained token limited to Actions on this repo
+GITHUB_DISPATCH_TOKEN = env("GITHUB_DISPATCH_TOKEN", default=None)
+GITHUB_REPO = env("GITHUB_REPO", default="alton-michaux/WaiverWise")
 
 # Claude explanations (optional)
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default=None)

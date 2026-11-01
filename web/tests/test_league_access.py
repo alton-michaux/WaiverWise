@@ -242,13 +242,15 @@ def test_users_without_a_league_get_no_banner(client, django_user_model):
     assert b'role="alert"' not in client.get("/startsit/").content
 
 
-def test_error_text_and_fixes_are_for_staff():
-    SyncRun.objects.create(step="league", ok=False, error="RuntimeError: league name here")
-    assert "league name here" not in sync_problem(timezone.now())
-    assert "league name here" in sync_problem(timezone.now(), staff=True)
-    SyncRun.objects.create(step="league", ok=False, error="ESPNAccessDenied: nope")
-    assert "ESPN_S2" not in sync_problem(timezone.now())
-    assert "ESPN_S2" in sync_problem(timezone.now(), staff=True)
+def test_error_text_is_for_staff():
+    SyncRun.objects.create(step="league", ok=False, error="RuntimeError")
+    assert "RuntimeError" not in sync_problem(timezone.now())
+    assert "RuntimeError" in sync_problem(timezone.now(), staff=True)
+
+
+def test_rejected_logins_tell_members_who_can_fix_it():
+    SyncRun.objects.create(step="league", ok=False, error="ESPNAccessDenied")
+    assert "needs to reconnect" in sync_problem(timezone.now())
 
 
 # --- membership rules

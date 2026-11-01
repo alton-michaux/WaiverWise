@@ -5,12 +5,20 @@ from datetime import datetime, timezone
 import json
 from itertools import batched
 
+import httpx
 from espn_api.football import League as EspnLeague
 from espn_api.football.constant import POSITION_MAP, PRO_TEAM_MAP
 from espn_api.football.player import Player as EspnPlayer
+from espn_api.requests.constant import FANTASY_BASE_ENDPOINT
+from espn_api.requests.espn_requests import ESPNAccessDenied, ESPNInvalidLeague, EspnFantasyRequests
 
 PLAYER_CARD_BATCH = 50
 FREE_AGENT_POOL = 300
+PROBE_TIMEOUT_SECONDS = 15  # this runs inside a web request, and espn-api's own calls have no timeout
+
+
+class EspnUnavailable(Exception):
+    pass
 
 
 @dataclass
@@ -29,6 +37,7 @@ class TeamData:
     roster: list[tuple[int, str]]  # (player espn_id, lineup slot)
     # week -> (opponent espn_id, my score)
     schedule: dict[int, tuple[int, float]]
+    owner_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -82,6 +91,78 @@ class LeagueData:
     scoring_type: str = "H2H_POINTS"
 
 
+@dataclass
+class TeamInfo:
+    espn_id: int
+    name: str
+    abbrev: str
+    owner_ids: list[str]
+
+
+@dataclass
+class LeagueInfo:
+    """Just enough to decide on a league and pick a team, from one quick request."""
+
+    espn_id: int
+    season: int
+    name: str
+    team_count: int
+    current_week: int
+    reg_season_weeks: int
+    final_week: int
+    scoring_type: str
+    lineup_slots: dict[str, int]
+    scoring: dict[str, dict]
+    teams: list[TeamInfo]
+
+
+def probe_league(league_id: int, season: int, espn_s2: str | None = None, swid: str | None = None) -> LeagueInfo:
+    """Raises ESPNAccessDenied (private, or these cookies aren't in it), ESPNInvalidLeague or EspnUnavailable."""
+    cookies = {"espn_s2": espn_s2, "SWID": swid} if espn_s2 and swid else None
+    try:
+        response = httpx.get(
+            f"{FANTASY_BASE_ENDPOINT}ffl/seasons/{season}/segments/0/leagues/{league_id}",
+            params={"view": ["mSettings", "mTeam", "mStatus"]},
+            cookies=cookies,
+            timeout=PROBE_TIMEOUT_SECONDS,
+            follow_redirects=True,
+        )
+    except httpx.HTTPError as e:
+        raise EspnUnavailable(type(e).__name__) from None
+    if response.status_code == 401:
+        raise ESPNAccessDenied("not allowed")
+    if response.status_code in (400, 404):  # ESPN answers 400 for an id that was never a league
+        raise ESPNInvalidLeague("no such league")
+    if response.status_code != 200:
+        raise EspnUnavailable(f"HTTP {response.status_code}")
+    data = response.json()
+    data = data[0] if isinstance(data, list) else data
+    settings = data["settings"]
+    final_week = data["status"]["finalScoringPeriod"]
+    return LeagueInfo(
+        espn_id=league_id,
+        season=season,
+        name=settings["name"],
+        team_count=settings["size"],
+        current_week=min(data["scoringPeriodId"], final_week),
+        reg_season_weeks=settings["scheduleSettings"]["matchupPeriodCount"],
+        final_week=final_week,
+        scoring_type=settings["scoringSettings"].get("scoringType", ""),
+        lineup_slots=_lineup_slots(settings["rosterSettings"]["lineupSlotCounts"]),
+        scoring=_scoring(settings["scoringSettings"]["scoringItems"]),
+        teams=[
+            TeamInfo(t["id"], t.get("name") or f"Team {t['id']}", t.get("abbrev", ""), t.get("owners", []))
+            for t in data["teams"]
+        ],
+    )
+
+
+def fetch_claims(league_id: int, season: int, current_week: int, espn_s2: str, swid: str) -> list[PendingMoveData]:
+    """The waiver claims these cookies can see."""
+    request = EspnFantasyRequests("nfl", season, league_id, cookies={"espn_s2": espn_s2, "SWID": swid})
+    return [m for m in _pending_moves(request, current_week) if m.kind == "waiver"]
+
+
 def fetch_league(league_id: int, season: int, espn_s2: str | None, swid: str | None) -> LeagueData:
     league = EspnLeague(league_id=league_id, year=season, espn_s2=espn_s2, swid=swid)
     settings = league.espn_request.league_get(params={"view": "mSettings"})["settings"]
@@ -108,7 +189,7 @@ def fetch_league(league_id: int, season: int, espn_s2: str | None, swid: str | N
         teams=teams,
         players=players,
         pro_games=_pro_games(pro_schedule),
-        pending=_pending_moves(league),
+        pending=_visible_pending_moves(league, bool(espn_s2 and swid)),
         scoring_type=settings["scoringSettings"].get("scoringType", ""),
     )
 
@@ -123,6 +204,7 @@ def _team(t) -> TeamData:
         name=t.team_name,
         abbrev=t.team_abbrev,
         owners=[f"{o.get('firstName', '')} {o.get('lastName', '')}".strip() for o in t.owners],
+        owner_ids=[o["id"] for o in t.owners if o.get("id")],
         wins=t.wins,
         losses=t.losses,
         ties=t.ties,
@@ -194,7 +276,17 @@ PENDING_LOOKBACK_WEEKS = 2
 DEAD_TRADE_TYPES = {"TRADE_DECLINE", "TRADE_VETO", "TRADE_ERROR"}
 
 
-def _pending_moves(league: EspnLeague) -> list[PendingMoveData]:
+def _visible_pending_moves(league: EspnLeague, signed_in: bool) -> list[PendingMoveData]:
+    try:
+        return _pending_moves(league.espn_request, league.current_week)
+    except ESPNAccessDenied:
+        # a public league may still keep transactions from anonymous requests (inferred: untested)
+        if signed_in:
+            raise
+        return []
+
+
+def _pending_moves(request: EspnFantasyRequests, current_week: int) -> list[PendingMoveData]:
     """Accepted-but-unprocessed trades and pending waiver claims.
 
     ESPN never updates a proposal's or claim's own status; acceptance, cancellation, vetoes
@@ -202,8 +294,8 @@ def _pending_moves(league: EspnLeague) -> list[PendingMoveData]:
     Waiver claims are only visible for the authenticated owner's team.
     """
     txns = {}
-    for week in range(max(1, league.current_week - PENDING_LOOKBACK_WEEKS), league.current_week + 1):
-        data = league.espn_request.league_get(params={"view": "mTransactions2", "scoringPeriodId": week})
+    for week in range(max(1, current_week - PENDING_LOOKBACK_WEEKS), current_week + 1):
+        data = request.league_get(params={"view": "mTransactions2", "scoringPeriodId": week})
         for t in data.get("transactions", []):
             txns[t["id"]] = t
 

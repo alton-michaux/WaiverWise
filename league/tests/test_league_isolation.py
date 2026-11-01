@@ -267,7 +267,7 @@ def test_pending_labels_only_cover_this_leagues_pool(two_leagues, shared_player)
     PendingMove.objects.create(
         league=full,
         espn_id="m1",
-        kind=PendingMove.WAIVER,
+        kind=PendingMove.TRADE,
         team_espn_id=1,
         items=[
             {"player_id": shared_player.espn_id, "from_team": 0, "to_team": 1, "type": "ADD"},
@@ -329,13 +329,6 @@ def test_sync_banner_ignores_other_leagues_failures(two_leagues):
     SyncRun.objects.create(league=half, step="league", ok=False, error="ESPNAccessDenied: nope")
     assert sync_problem(timezone.now(), full) == ""
     assert "ESPN rejected" in sync_problem(timezone.now(), half)
-
-
-def test_sync_all_records_the_league_only_on_the_league_step(two_leagues, settings):
-    full, _ = two_leagues
-    settings.ESPN_LEAGUE_ID, settings.ESPN_SEASON = full.espn_id, full.season
-    assert SyncAll()._league_of("league") == full
-    assert SyncAll()._league_of("projections") is None
 
 
 def test_pruning_runs_keeps_each_leagues_history(two_leagues, monkeypatch):

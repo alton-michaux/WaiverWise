@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
 
-from league.models import SyncRun
+from league.models import EspnCredential, SyncRun
 from web.services import remembered_team
 
 STALE_AFTER = timedelta(hours=12)
@@ -16,7 +16,19 @@ def sync_status(request):
     if not request.user.is_authenticated or (request.league is None and not request.user.is_staff):
         return {}
     last_synced = request.league.synced_at if request.league else None
-    return {"last_synced": last_synced, "sync_problem": sync_problem(last_synced, request.league, request.user.is_staff)}
+    return {
+        "last_synced": last_synced,
+        "sync_problem": sync_problem(last_synced, request.league, request.user.is_staff),
+        "reconnect_league": _expired_login(request),
+    }
+
+
+def _expired_login(request):
+    """This user's own cookies for this league stopped working, which only they can fix."""
+    if request.league is None:
+        return None
+    expired = EspnCredential.objects.filter(user=request.user, league=request.league, status=EspnCredential.EXPIRED)
+    return request.league if expired.exists() else None
 
 
 def team_picker(request):
@@ -49,13 +61,7 @@ def sync_problem(last_synced, league=None, staff=False) -> str:
     latest = SyncRun.objects.filter(Q(league=league) | Q(league__isnull=True), step="league").first()
     if latest and not latest.ok:
         if "ESPNAccessDenied" in latest.error:
-            text = "ESPN rejected this league's saved login, so its data isn't updating."
-            if staff:
-                text += (
-                    " Grab fresh espn_s2 and SWID cookies and update the ESPN_S2 / ESPN_SWID secrets "
-                    "(GitHub Actions in production, .env locally)."
-                )
-            return text
+            return "ESPN rejected every saved login for this league, so its data isn't updating. A member who connected it needs to reconnect."
         detail = f" ({latest.error[:120]})" if staff else ""
         return f"The last league sync failed{detail}. Data may be out of date."
     if last_synced and timezone.now() - last_synced > STALE_AFTER:

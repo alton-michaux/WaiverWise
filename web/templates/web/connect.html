@@ -1,0 +1,28 @@
+{% extends "web/base.html" %}
+{% block title %}Connect a league · WaiverWise{% endblock %}
+{% block content %}
+<article class="login">
+  <h2>Connect a league</h2>
+  {% if error %}<p class="move-out" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" autocomplete="off">
+    {% csrf_token %}
+    <label>ESPN league ID or address
+      <input type="text" name="league" value="{{ league_value }}" required {% if not ask_cookies %}autofocus{% endif %}>
+      <small class="muted">It's the <code>leagueId</code> in the address of any page in your league.</small>
+    </label>
+    {% if ask_cookies %}
+    <input type="hidden" name="ask_cookies" value="1">
+    <p>This league is private, so ESPN needs your login cookies to open it. You'll need a computer for this, since phone browsers don't show cookies:</p>
+    <ol>
+      <li>Sign in at fantasy.espn.com in a desktop browser.</li>
+      <li>Open developer tools (F12), then Application (Chrome) or Storage (Firefox), then Cookies.</li>
+      <li>Copy the values of <code>espn_s2</code> and <code>SWID</code>.</li>
+    </ol>
+    <label><code>espn_s2</code> <input type="password" name="espn_s2" autocomplete="off" required autofocus></label>
+    <label><code>SWID</code> <input type="password" name="swid" autocomplete="off" required></label>
+    <p class="muted"><strong>What you're handing over:</strong> these cookies are your ESPN login, so they could do anything you can do on ESPN until they expire. WaiverWise only uses them to read your league. They're stored encrypted, your leaguemates never see them, and you can delete them any time from your account page.</p>
+    {% endif %}
+    <button type="submit">{% if ask_cookies %}Connect{% else %}Continue{% endif %}</button>
+  </form>
+</article>
+{% endblock %}

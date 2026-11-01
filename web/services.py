@@ -49,6 +49,10 @@ class PlayerRow:
         return {"left": at(p.floor), "width": round(at(p.ceiling) - at(p.floor), 1), "mark": at(p.mean)}
 
 
+class LeagueNotReady(Exception):
+    """Connected, but the first sync hasn't landed, so there's nothing to analyze yet."""
+
+
 def memberships_of(user) -> list[Membership]:
     """Newest season first, so someone who hasn't picked lands on a league that's still being played."""
     if not user.is_authenticated:
@@ -79,19 +83,24 @@ def remembered_team(request, membership: Membership) -> Team | None:
     return membership.league.teams.filter(espn_id=team_id).first() if team_id.isdigit() else None
 
 
-def tied_up(league: League) -> dict[int, str]:
-    """Player pk -> label for players in an accepted trade or pending waiver claim."""
+def tied_up(league: League, viewer=None) -> dict[int, str]:
+    """Player pk -> label for players in an accepted trade, or in a waiver claim of the viewer's own.
+
+    Claims are private to whoever made them. Without a viewer, only trades show.
+    """
     teams = dict(league.teams.values_list("espn_id", "name"))
     players = dict(Player.objects.filter(league_entries__league=league).values_list("espn_id", "pk"))
     labels = {}
-    for move in PendingMove.objects.filter(league=league):
+    visible = Q(kind=PendingMove.TRADE)
+    if viewer is not None:  # Q(owner=None) would match every claim with no owner
+        visible |= Q(kind=PendingMove.WAIVER, owner=viewer)
+    for move in PendingMove.objects.filter(visible, league=league):
         for item in move.items:
             pk = players.get(item["player_id"])
             if pk is None:
                 continue
             if move.kind == PendingMove.TRADE:
                 labels[pk] = f"Accepted trade → {teams.get(item['to_team'], 'unknown')}"
-            # ESPN only exposes the authenticated owner's waiver claims, so these are always the user's
             elif item["to_team"] == 0:
                 labels[pk] = "Dropping in your pending claim"
             else:
@@ -106,14 +115,14 @@ def opponent_of(team: Team, week: int) -> Team | None:
     return m.team_b if m.team_a_id == team.pk else m.team_a
 
 
-def roster_spots(team: Team, week: int) -> tuple[list[RosterSpot], dict[int, PlayerRow]]:
+def roster_spots(team: Team, week: int, viewer=None) -> tuple[list[RosterSpot], dict[int, PlayerRow]]:
     league = team.league
     entries = list(team.roster.order_by("pk"))  # the win simulation depends on order, so keep it stable
     players = {p.pk: p for p in league_players(league).filter(pk__in=[e.player_id for e in entries])}
     proj = weekly_projections(league, list(players.values()), range(week, week + 1))
     kickoffs = week_kickoffs(league.season, week)
     opponents = dict(ProGame.objects.filter(season=league.season, week=week).values_list("team", "opponent"))
-    pending = tied_up(league)
+    pending = tied_up(league, viewer)
 
     spots, rows = [], {}
     for e in entries:
@@ -136,10 +145,10 @@ def add_matchups(rows: dict[int, PlayerRow], league: League, week: int) -> None:
         row.line = lines.get(row.player.pro_team)
 
 
-def start_sit(team: Team, mode: str = "mean") -> dict:
+def start_sit(team: Team, mode: str = "mean", viewer=None) -> dict:
     league = team.league
     week = league.current_week
-    spots, rows = roster_spots(team, week)
+    spots, rows = roster_spots(team, week, viewer)
     add_matchups(rows, league, week)
     opponent = opponent_of(team, week)
     opp_spots = roster_spots(opponent, week)[0] if opponent else None
@@ -202,10 +211,10 @@ def win_summary(rec: Recommendation) -> dict | None:
     }
 
 
-def move_count(team: Team) -> int:
+def move_count(team: Team, viewer=None) -> int:
     """How many moves the default mode recommends. Skips the simulation, so it's cheap enough for any page."""
     league = team.league
-    spots, _ = roster_spots(team, league.current_week)
+    spots, _ = roster_spots(team, league.current_week, viewer)
     return len(recommend(spots, league.lineup_slots).moves)
 
 
@@ -343,7 +352,7 @@ class WaiverRow:
         return self.ros_gain >= SMALLEST_GAIN or self.helps_this_week
 
 
-def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
+def waivers(team: Team, position: str | None = None, limit: int = 40, viewer=None) -> dict:
     league = team.league
     weeks = remaining_weeks(league)
     players = list(league_players(league))
@@ -361,7 +370,7 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
     free_agents = [p for p in players if p.fa_status and p.pk not in rostered and ros_points(p) > 0]
 
     fa_weekly = [weekly(p) for p in free_agents]
-    pending = tied_up(league)
+    pending = tied_up(league, viewer)
     report = evaluate(
         [weekly(p) for p in mine],
         fa_weekly,
@@ -423,7 +432,7 @@ def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
 class TradeContext:
     """Everything trade tools need, built once per request."""
 
-    def __init__(self, league: League):
+    def __init__(self, league: League, viewer=None):
         self.league = league
         self.weeks = remaining_weeks(league)
         players = list(league_players(league))
@@ -442,7 +451,7 @@ class TradeContext:
         free_agents = [w for pk, w in self.weekly.items() if pk not in rostered and self.players[pk].fa_status]
         self.season = SeasonEvaluator(league.lineup_slots, self.weeks, streamers(free_agents, self.weeks))
         self.capacity = roster_capacity(league.lineup_slots)
-        self.tied_up = tied_up(league)
+        self.tied_up = tied_up(league, viewer)
         self.schedules = ScheduleGrades(league)
 
     def ros_points(self, pid: int) -> float:

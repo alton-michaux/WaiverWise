@@ -7,7 +7,7 @@ from django.db.models import Q
 
 from league.models import SyncRun, Team
 from web.models import TradeDeals
-from web.services import TradeContext, trade_rows
+from web.services import TradeContext, trade_rows, tied_up
 
 BUDGET_SECONDS = 20  # stop starting new partners after this; the page asks again for the rest
 STORED_PER_PARTNER = 20
@@ -65,8 +65,13 @@ def _search(ctx: TradeContext, team: Team, partner: Team, version: str) -> Trade
     return row
 
 
-def _rank(team: Team, rows: list[TradeDeals], cap_targets: bool) -> list[dict]:
-    deals = [(row.partner, deal) for row in rows for deal in row.deals]
+def _rank(team: Team, rows: list[TradeDeals], cap_targets: bool, hidden: set[int] = frozenset()) -> list[dict]:
+    deals = [
+        (row.partner, deal)
+        for row in rows
+        for deal in row.deals
+        if not hidden & {p["id"] for p in deal["gives"] + deal["gets"]}
+    ]
     deals.sort(key=lambda pair: (pair[1]["you"], pair[1]["them"]), reverse=True)
     shown, per_target = [], {}
     for partner, deal in deals:
@@ -89,11 +94,17 @@ def _rank(team: Team, rows: list[TradeDeals], cap_targets: bool) -> list[dict]:
     return shown
 
 
-def best_deals(team: Team, partner: Team | None = None, search: bool = True, budget: float | None = None) -> dict:
+def best_deals(
+    team: Team, partner: Team | None = None, search: bool = True, budget: float | None = None, viewer=None
+) -> dict:
     """Ranked deals for `team`, searching partners not stored yet until the budget runs out.
 
     Partial results are fine: `done` is False and the page asks again, so no single request
     has to outlast a slow server's timeout. `search=False` only reads what's stored.
+
+    Stored deals are shared by everyone in the league, so they must never depend on one member's
+    private waiver claims. The search ignores claims, and deals touching the viewer's own are
+    hidden here instead.
     """
     league = team.league
     version = data_version(league)
@@ -114,7 +125,7 @@ def best_deals(team: Team, partner: Team | None = None, search: bool = True, bud
     chosen = [rows[partner.pk]] if partner and partner.pk in rows else list(rows.values())
     return {
         "team": team,
-        "deals": _rank(team, chosen, cap_targets=partner is None),
+        "deals": _rank(team, chosen, cap_targets=partner is None, hidden=set(tied_up(league, viewer))),
         "total": sum(r.total for r in chosen),
         "checked": len(rows),
         "of": len(partners),

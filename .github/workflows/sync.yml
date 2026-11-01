@@ -16,23 +16,25 @@ on:
       steps:
         description: "Steps to run (space-separated: league nfl projections)"
         default: "league nfl projections"
+      league:
+        description: "Run one league's first sync instead (its id in the database)"
+        default: ""
 
-# never run two syncs at once; a queued run waits rather than being dropped
+# never run two syncs of the same thing at once. A league's first sync gets its own group so a scheduled
+# run can't bump it out of the queue, and advisory locks in sync_all keep them from colliding.
 concurrency:
-  group: sync
+  group: sync-${{ inputs.league || 'all' }}
   cancel-in-progress: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      ESPN_LEAGUE_ID: ${{ secrets.ESPN_LEAGUE_ID }}
       ESPN_SEASON: ${{ secrets.ESPN_SEASON }}
-      ESPN_S2: ${{ secrets.ESPN_S2 }}
-      ESPN_SWID: ${{ secrets.ESPN_SWID }}
+      CREDENTIAL_KEY: ${{ secrets.CREDENTIAL_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -64,5 +66,13 @@ jobs:
       - name: Sync
         env:
           STEPS: ${{ steps.steps.outputs.steps }}
-        # sync_all exits non-zero if any step fails, so GitHub emails you (e.g. expired ESPN cookies)
-        run: uv run python manage.py sync_all --only $STEPS
+          LEAGUE: ${{ inputs.league }}
+        # sync_all exits non-zero if a step fails, so GitHub emails you. Expired cookies don't count:
+        # the app asks that member to reconnect. Logs here are public, so they only carry ids and counts.
+        run: |
+          if [ -n "$LEAGUE" ]; then
+            case "$LEAGUE" in *[!0-9]*) echo "league must be a number"; exit 1 ;; esac
+            uv run python manage.py sync_all --league "$LEAGUE"
+          else
+            uv run python manage.py sync_all --only $STEPS
+          fi

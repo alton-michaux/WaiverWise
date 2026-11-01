@@ -47,24 +47,28 @@ def league_data(**fields):
     )
 
 
-@pytest.mark.django_db
-def test_sync_refuses_an_unsupported_league_before_saving_anything(monkeypatch, settings):
-    settings.ESPN_LEAGUE_ID = 1
+@pytest.fixture
+def waiting_league(db):
+    return League.objects.create(
+        espn_id=1, season=2026, name="L", team_count=2, current_week=8, reg_season_weeks=14, is_public=True, has_data=False
+    )
+
+
+def test_sync_refuses_an_unsupported_league_before_saving_anything(monkeypatch, waiting_league):
     monkeypatch.setattr(espn_client, "fetch_league", lambda *a: league_data(scoring_type="ROTO"))
     with pytest.raises(CommandError, match="head-to-head points"):
-        call_command("sync_league")
-    assert not League.objects.exists()
+        call_command("sync_league", waiting_league.pk)
+    waiting_league.refresh_from_db()
+    assert not waiting_league.has_data
 
 
-@pytest.mark.django_db
-def test_sync_reports_rules_it_cannot_project(monkeypatch, settings, capsys):
-    settings.ESPN_LEAGUE_ID = 1
+def test_sync_reports_rules_it_cannot_project(monkeypatch, waiting_league, capsys):
     scoring = {"17": {"points": 2.0, "overrides": {}}}
     monkeypatch.setattr(espn_client, "fetch_league", lambda *a: league_data(scoring=scoring))
-    call_command("sync_league")
+    call_command("sync_league", waiting_league.pk)
     out = capsys.readouterr().out
     assert "1 scoring rules have no Sleeper projection" in out
-    assert "17" not in out.split("pending moves")[1]
+    assert "17" not in out.split("waiver claims")[1]
 
 
 @pytest.mark.django_db

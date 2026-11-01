@@ -1,0 +1,11 @@
+{% extends "web/base.html" %}
+{% block title %}Setting up · WaiverWise{% endblock %}
+{% block content %}
+<article>
+  <h2>Setting up your league</h2>
+  <div hx-get="{% url 'league_status' %}" hx-trigger="load, every 5s">
+    <p aria-busy="true">Pulling your league from ESPN. This usually takes a minute or two.</p>
+  </div>
+  {% if user.is_staff %}<p class="muted">No first sync starts without <code>GITHUB_DISPATCH_TOKEN</code>. Run <code>manage.py sync_all --league {{ request.league.pk }}</code> instead.</p>{% endif %}
+</article>
+{% endblock %}
