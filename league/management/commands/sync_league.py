@@ -4,7 +4,7 @@ from django.db import transaction
 
 from league import espn_client
 from league.bulk import upsert
-from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from league.models import League, LeaguePlayer, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
 
 
 class Command(BaseCommand):
@@ -58,32 +58,43 @@ class Command(BaseCommand):
                     eligible_slots=p.eligible_slots,
                     injury_status=p.injury_status,
                     percent_owned=p.percent_owned,
+                )
+                for p in data.players
+            ],
+            unique_fields=["espn_id"],
+            update_fields=["name", "position", "pro_team", "eligible_slots", "injury_status", "percent_owned"],
+        )
+        players = dict(Player.objects.filter(espn_id__in=[p.espn_id for p in data.players]).values_list("espn_id", "pk"))
+        upsert(
+            LeaguePlayer,
+            [
+                LeaguePlayer(
+                    league=league,
+                    player_id=players[p.espn_id],
                     season_projection=p.season_projection,
                     fa_status=p.fa_status,
                     waiver_clears=p.waiver_clears,
                 )
                 for p in data.players
             ],
-            unique_fields=["espn_id"],
-            update_fields=[
-                "name", "position", "pro_team", "eligible_slots", "injury_status",
-                "percent_owned", "season_projection", "fa_status", "waiver_clears",
-            ],
+            unique_fields=["league", "player"],
+            update_fields=["season_projection", "fa_status", "waiver_clears"],
         )
-        players = dict(Player.objects.filter(espn_id__in=[p.espn_id for p in data.players]).values_list("espn_id", "pk"))
         upsert(
             PlayerWeek,
             [
-                PlayerWeek(player_id=players[p.espn_id], season=data.season, week=week, **w)
+                PlayerWeek(league=league, player_id=players[p.espn_id], season=data.season, week=week, **w)
                 for p in data.players
                 for week, w in p.weeks.items()
             ],
-            unique_fields=["player", "season", "week"],
+            unique_fields=["league", "player", "season", "week"],
             update_fields=["points", "projected_points", "breakdown"],
         )
 
         # players outside this sync's pool have unknown availability
-        Player.objects.exclude(espn_id__in=players.keys()).update(fa_status="", waiver_clears=None)
+        LeaguePlayer.objects.filter(league=league).exclude(player_id__in=players.values()).update(
+            fa_status="", waiver_clears=None
+        )
 
         upsert(
             Team,

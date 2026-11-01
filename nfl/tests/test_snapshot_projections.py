@@ -4,7 +4,7 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
-from league.models import League, Player, PlayerWeek, ProGame
+from league.models import League, LeaguePlayer, Player, PlayerWeek, ProGame
 from nfl.models import GameLine, Projection, ProjectionSnapshot
 
 pytestmark = pytest.mark.django_db
@@ -24,11 +24,13 @@ def add_game(team, opponent, kickoff, week=WEEK):
 
 
 def add_player(espn_id, pro_team, espn=None, sleeper=None):
+    league = League.objects.get()
     player = Player.objects.create(espn_id=espn_id, name=f"P{espn_id}", position="WR", pro_team=pro_team)
+    LeaguePlayer.objects.create(league=league, player=player)
     if espn is not None:
-        PlayerWeek.objects.create(player=player, season=SEASON, week=WEEK, projected_points=espn)
+        PlayerWeek.objects.create(league=league, player=player, season=SEASON, week=WEEK, projected_points=espn)
     if sleeper is not None:
-        Projection.objects.create(player=player, season=SEASON, week=WEEK, source="sleeper", points=sleeper)
+        Projection.objects.create(league=league, player=player, season=SEASON, week=WEEK, source="sleeper", points=sleeper)
     return player
 
 
@@ -110,10 +112,10 @@ def test_saves_the_line_and_rating_as_of_this_week(league):
     GameLine.objects.create(season=SEASON, week=WEEK, team="BUF", implied_total=27.5)
     for week in (1, 2, 3):
         add_game("BUF", "MIA", later(), week=week)
-        PlayerWeek.objects.create(player=player, season=SEASON, week=week, points=20.0, breakdown={"rec": 1})
+        PlayerWeek.objects.create(league=league, player=player, season=SEASON, week=week, points=20.0, breakdown={"rec": 1})
     for week in (4, 5):
         add_game("BUF", "KC", later(), week=week)
-        PlayerWeek.objects.create(player=player, season=SEASON, week=week, points=10.0, breakdown={"rec": 1})
+        PlayerWeek.objects.create(league=league, player=player, season=SEASON, week=week, points=10.0, breakdown={"rec": 1})
 
     call_command("snapshot_projections")
 

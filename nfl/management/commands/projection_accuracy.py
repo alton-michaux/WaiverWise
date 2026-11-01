@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from analysis.accuracy import Result, residual_fit, source_errors
-from league.models import League, PlayerWeek
+from league.models import PlayerWeek, active_leagues
 from nfl.models import ProjectionSnapshot
 
 SIGNALS = {"opp_rating": "matchup rating", "implied_total": "implied total"}
@@ -11,10 +11,15 @@ class Command(BaseCommand):
     help = "Compare saved projections with what happened, and test whether matchup data explains the misses."
 
     def handle(self, *args, **opts):
-        league = League.objects.order_by("-season").first()
-        if not league:
+        leagues = active_leagues()
+        if not leagues:
             self.stdout.write("no league, nothing to measure")
             return
+        for league in leagues:
+            self.stdout.write(f"league {league.pk}:")
+            self._report(league)
+
+    def _report(self, league):
         results = self._results(league)
         if not results:
             self.stdout.write("no finished weeks with snapshots yet")
@@ -28,13 +33,16 @@ class Command(BaseCommand):
 
     def _results(self, league) -> list[Result]:
         snapshots = ProjectionSnapshot.objects.filter(
+            league=league,
             season=league.season,
             week__lt=league.current_week,
             mean__gt=0,  # ruled out before kickoff: 0 by rule, so it says nothing about the projections
         ).select_related("player")
         actual = {
             (pid, week): points or 0
-            for pid, week, points in PlayerWeek.objects.filter(season=league.season, week__lt=league.current_week)
+            for pid, week, points in PlayerWeek.objects.filter(
+                league=league, season=league.season, week__lt=league.current_week
+            )
             .exclude(breakdown={})  # empty breakdown = didn't play
             .values_list("player_id", "week", "points")
         }

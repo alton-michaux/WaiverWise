@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
@@ -14,8 +15,9 @@ STALE_AFTER = timedelta(hours=12)
 def sync_status(request):
     if not request.user.is_authenticated:
         return {}
-    last_synced = League.objects.order_by("-synced_at").values_list("synced_at", flat=True).first()
-    return {"last_synced": last_synced, "sync_problem": sync_problem(last_synced)}
+    league = League.objects.order_by("-season").first()
+    last_synced = league.synced_at if league else None
+    return {"last_synced": last_synced, "sync_problem": sync_problem(last_synced, league)}
 
 
 def team_picker(request):
@@ -41,9 +43,10 @@ def team_picker(request):
     return {"picker": SimpleLazyObject(build)}
 
 
-def sync_problem(last_synced) -> str:
-    """Banner text when league data can't be trusted, else ""."""
-    latest = SyncRun.objects.filter(step="league").first()
+def sync_problem(last_synced, league=None) -> str:
+    """Banner text when this league's data can't be trusted, else ""."""
+    # no league = the sync failed before the league existed
+    latest = SyncRun.objects.filter(Q(league=league) | Q(league__isnull=True), step="league").first()
     if latest and not latest.ok:
         if "ESPNAccessDenied" in latest.error:
             return (

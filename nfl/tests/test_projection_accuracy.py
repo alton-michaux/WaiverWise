@@ -21,8 +21,11 @@ def league():
 
 def game(espn_id, week=7, mean=10.0, points=12.0, played=True, position="WR"):
     player = Player.objects.create(espn_id=espn_id, name=f"P{espn_id}", position=position, pro_team="BUF")
-    ProjectionSnapshot.objects.create(player=player, season=SEASON, week=week, mean=mean, sd=1.0, espn=mean, sleeper=mean)
-    PlayerWeek.objects.create(player=player, season=SEASON, week=week, points=points, breakdown={"rec": 1} if played else {})
+    league = League.objects.get()
+    ProjectionSnapshot.objects.create(
+        league=league, player=player, season=SEASON, week=week, mean=mean, sd=1.0, espn=mean, sleeper=mean
+    )
+    PlayerWeek.objects.create(league=league, player=player, season=SEASON, week=week, points=points, breakdown={"rec": 1} if played else {})
 
 
 def output():

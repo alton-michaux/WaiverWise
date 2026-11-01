@@ -50,7 +50,7 @@ def test_full_sheet_renders_every_section(signed_in, receiver):
         season=SEASON, week=WEEK, team="BUF", is_home=False, spread=-3.0, total=48.0, implied_total=25.5, rest_days=13,
         roof="dome",
     )
-    PlayerWeek.objects.create(player=receiver, season=SEASON, week=7, points=21.0, breakdown={"rec": 1})
+    PlayerWeek.objects.create(league=League.objects.get(), player=receiver, season=SEASON, week=7, points=21.0, breakdown={"rec": 1})
     Usage.objects.create(player=receiver, season=SEASON, week=7, snap_pct=0.8, target_share=0.25, air_yards_share=0.3, targets=8)
     html = sheet(signed_in, receiver)
     for text in ("Keon Coleman", "@ O8", "25.5", "-3.0", "Off a bye", "Dome", "Rest of season", "Fantasy playoffs",
@@ -91,8 +91,8 @@ def test_no_game_log_hides_consistency(signed_in, receiver):
 
 
 def test_game_not_played_is_left_out_of_consistency(league, receiver):
-    PlayerWeek.objects.create(player=receiver, season=SEASON, week=6, points=0, breakdown={})
-    PlayerWeek.objects.create(player=receiver, season=SEASON, week=7, points=9.0, breakdown={"rec": 1})
+    PlayerWeek.objects.create(league=League.objects.get(), player=receiver, season=SEASON, week=6, points=0, breakdown={})
+    PlayerWeek.objects.create(league=League.objects.get(), player=receiver, season=SEASON, week=7, points=9.0, breakdown={"rec": 1})
     assert services.player_sheet(league, receiver)["consistency"].games == 1
 
 

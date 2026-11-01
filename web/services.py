@@ -18,7 +18,7 @@ from analysis import trades
 from analysis.season import SeasonEvaluator
 from analysis.value import PlayerValue, starters_by_position, vorp
 from analysis.waivers import WeeklyPlayer, evaluate, roster_capacity, streamers
-from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team, league_players
 from nfl.consensus import game_started, playoff_weeks, remaining_weeks, week_kickoffs, weekly_projections
 from nfl.matchups import defense_ratings, upcoming_opponents
 from nfl.models import GameLine, Usage
@@ -70,7 +70,7 @@ def remembered_team(request, league: League) -> Team | None:
 def tied_up(league: League) -> dict[int, str]:
     """Player pk -> label for players in an accepted trade or pending waiver claim."""
     teams = dict(league.teams.values_list("espn_id", "name"))
-    players = dict(Player.objects.values_list("espn_id", "pk"))
+    players = dict(Player.objects.filter(league_entries__league=league).values_list("espn_id", "pk"))
     labels = {}
     for move in PendingMove.objects.filter(league=league):
         for item in move.items:
@@ -96,16 +96,16 @@ def opponent_of(team: Team, week: int) -> Team | None:
 
 def roster_spots(team: Team, week: int) -> tuple[list[RosterSpot], dict[int, PlayerRow]]:
     league = team.league
-    entries = list(team.roster.select_related("player"))
-    players = [e.player for e in entries]
-    proj = weekly_projections(league, players, range(week, week + 1))
+    entries = list(team.roster.order_by("pk"))  # the win simulation depends on order, so keep it stable
+    players = {p.pk: p for p in league_players(league).filter(pk__in=[e.player_id for e in entries])}
+    proj = weekly_projections(league, list(players.values()), range(week, week + 1))
     kickoffs = week_kickoffs(league.season, week)
     opponents = dict(ProGame.objects.filter(season=league.season, week=week).values_list("team", "opponent"))
     pending = tied_up(league)
 
     spots, rows = [], {}
     for e in entries:
-        p = e.player
+        p = players[e.player_id]
         locked = game_started(kickoffs.get(p.pro_team))
         projection = proj[(p.pk, week)]
         spots.append(RosterSpot(p.pk, tuple(p.eligible_slots), e.lineup_slot, projection, locked))
@@ -237,7 +237,7 @@ class ScheduleWeek:
 def _consistency(league: League, player: Player) -> tuple[Consistency | None, int]:
     """The player's game log against what the league starts at that position, and how many that is."""
     rows = list(
-        PlayerWeek.objects.filter(season=league.season, week__lt=league.current_week)
+        PlayerWeek.objects.filter(league=league, season=league.season, week__lt=league.current_week)
         .exclude(breakdown={})  # empty breakdown = didn't play
         .values_list("player_id", "player__position", "week", "points")
     )
@@ -334,7 +334,7 @@ class WaiverRow:
 def waivers(team: Team, position: str | None = None, limit: int = 40) -> dict:
     league = team.league
     weeks = remaining_weeks(league)
-    players = list(Player.objects.all())
+    players = list(league_players(league))
     proj = weekly_projections(league, players, weeks)
 
     def weekly(p: Player) -> WeeklyPlayer:
@@ -414,7 +414,7 @@ class TradeContext:
     def __init__(self, league: League):
         self.league = league
         self.weeks = remaining_weeks(league)
-        players = list(Player.objects.all())
+        players = list(league_players(league))
         self.players = {p.pk: p for p in players}
         self.proj = weekly_projections(league, players, self.weeks)
         self.weekly = {

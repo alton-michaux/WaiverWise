@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from analysis.matchups import Rating
 from analysis.projections import Projection
-from league.models import League, Matchup, Player, ProGame, RosterEntry, Team
+from league.models import League, LeaguePlayer, Matchup, Player, ProGame, RosterEntry, Team
 from nfl.models import GameLine
 from web import narrate, services
 from web.templatetags.waiverwise import slot_label, status_label
@@ -20,6 +20,7 @@ def add_player(team, slot, espn_id, name, pro_team):
     player = Player.objects.create(
         espn_id=espn_id, name=name, position="WR", pro_team=pro_team, eligible_slots=["WR", "BE"]
     )
+    LeaguePlayer.objects.create(league=team.league, player=player)
     RosterEntry.objects.create(team=team, player=player, lineup_slot=slot)
     return player
 

@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import F, Max, QuerySet
 
 
 class League(models.Model):
@@ -52,9 +53,6 @@ class Player(models.Model):
     eligible_slots = models.JSONField(default=list)
     injury_status = models.CharField(max_length=30, blank=True)
     percent_owned = models.FloatField(default=0)
-    season_projection = models.FloatField(default=0)  # ESPN rest-of-season total (inferred)
-    fa_status = models.CharField(max_length=10, blank=True)  # FREEAGENT / WAIVERS, blank if rostered
-    waiver_clears = models.DateTimeField(null=True, blank=True)
     # crosswalk ids from nflverse ff_playerids
     sleeper_id = models.CharField(max_length=20, blank=True, db_index=True)
     gsis_id = models.CharField(max_length=20, blank=True, db_index=True)
@@ -62,6 +60,38 @@ class Player(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.position}, {self.pro_team})"
+
+
+class LeaguePlayer(models.Model):
+    """A player as one league sees him. These rows also define the league's player pool."""
+
+    league = models.ForeignKey(League, on_delete=models.CASCADE, related_name="league_players")
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="league_entries")
+    season_projection = models.FloatField(default=0)  # ESPN rest-of-season total (inferred)
+    fa_status = models.CharField(max_length=10, blank=True)  # FREEAGENT / WAIVERS, blank if rostered
+    waiver_clears = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["league", "player"], name="uniq_league_player")]
+
+
+def league_players(league: League) -> QuerySet[Player]:
+    """The league's player pool, with its LeaguePlayer values available as attributes on each Player."""
+    return (
+        Player.objects.filter(league_entries__league=league)
+        .annotate(
+            season_projection=F("league_entries__season_projection"),
+            fa_status=F("league_entries__fa_status"),
+            waiver_clears=F("league_entries__waiver_clears"),
+        )
+        .order_by("pk")
+    )
+
+
+def active_leagues() -> QuerySet[League]:
+    """Every league in the newest season, which is what syncs keep up to date."""
+    season = League.objects.aggregate(Max("season"))["season__max"]
+    return League.objects.filter(season=season).order_by("pk")
 
 
 class RosterEntry(models.Model):
@@ -78,6 +108,7 @@ class RosterEntry(models.Model):
 class PlayerWeek(models.Model):
     """ESPN's per-week actual and projected points, already in league scoring."""
 
+    league = models.ForeignKey(League, on_delete=models.CASCADE, related_name="player_weeks")
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="weeks")
     season = models.PositiveSmallIntegerField()
     week = models.PositiveSmallIntegerField()
@@ -87,7 +118,7 @@ class PlayerWeek(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["player", "season", "week"], name="uniq_player_week")
+            models.UniqueConstraint(fields=["league", "player", "season", "week"], name="uniq_player_week")
         ]
 
 
@@ -139,6 +170,8 @@ class PendingMove(models.Model):
 class SyncRun(models.Model):
     """Outcome of one sync step, for the stale-data / expired-cookie banner."""
 
+    # null = a step shared by every league, or a league sync that failed before the league existed
+    league = models.ForeignKey(League, on_delete=models.CASCADE, null=True, blank=True, related_name="sync_runs")
     step = models.CharField(max_length=20)
     ok = models.BooleanField()
     error = models.TextField(blank=True)

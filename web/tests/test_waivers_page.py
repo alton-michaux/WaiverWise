@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from analysis.matchups import Rating
 from analysis.projections import Projection
-from league.models import League, Player, RosterEntry, Team
+from league.models import League, LeaguePlayer, Player, RosterEntry, Team
 from web import narrate, services
 
 pytestmark = pytest.mark.django_db
@@ -42,9 +42,11 @@ def means(monkeypatch):
     return values
 
 
-def add(espn_id, name, position="WR", **fields):
+def add(espn_id, name, position="WR", fa_status="", waiver_clears=None, **fields):
     fields.setdefault("eligible_slots", [position, "BE"])
-    return Player.objects.create(espn_id=espn_id, name=name, position=position, pro_team="NYJ", **fields)
+    player = Player.objects.create(espn_id=espn_id, name=name, position=position, pro_team="NYJ", **fields)
+    LeaguePlayer.objects.create(league=League.objects.get(), player=player, fa_status=fa_status, waiver_clears=waiver_clears)
+    return player
 
 
 def rostered(team, slot, espn_id, name):

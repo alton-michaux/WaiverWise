@@ -20,7 +20,7 @@ def add_week(player, week, points, opponent, played=True):
         season=SEASON, week=week, team=player.pro_team, defaults={"opponent": opponent}
     )
     PlayerWeek.objects.create(
-        player=player, season=SEASON, week=week, points=points, breakdown={"rec": 1} if played else {}
+        league=League.objects.get(), player=player, season=SEASON, week=week, points=points, breakdown={"rec": 1} if played else {}
     )
 
 
@@ -58,7 +58,7 @@ def test_players_who_did_not_play_are_left_out(league):
 
     benched = player(2, "BUF")
     for week in range(1, 7):
-        PlayerWeek.objects.create(player=benched, season=SEASON, week=week, points=50.0, breakdown={})
+        PlayerWeek.objects.create(league=league, player=benched, season=SEASON, week=week, points=50.0, breakdown={})
 
     assert defense_ratings(league) == alone
 
@@ -78,6 +78,6 @@ def test_a_players_new_team_without_that_game_is_skipped(league):
     faced_mia_three_times(p)
     alone = defense_ratings(league)
 
-    PlayerWeek.objects.create(player=p, season=SEASON, week=7, points=99.0, breakdown={"rec": 1})  # bye week
+    PlayerWeek.objects.create(league=league, player=p, season=SEASON, week=7, points=99.0, breakdown={"rec": 1})  # bye week
 
     assert defense_ratings(league) == alone

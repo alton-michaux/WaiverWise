@@ -1,11 +1,12 @@
 from django.db import models
 
-from league.models import Player
+from league.models import League, Player
 
 
 class Projection(models.Model):
     """External weekly projections, scored with the league's rules."""
 
+    league = models.ForeignKey(League, on_delete=models.CASCADE, related_name="projections")
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="projections")
     season = models.PositiveSmallIntegerField()
     week = models.PositiveSmallIntegerField()
@@ -18,7 +19,7 @@ class Projection(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["player", "season", "week", "source"], name="uniq_projection"
+                fields=["league", "player", "season", "week", "source"], name="uniq_projection"
             )
         ]
 
@@ -26,6 +27,7 @@ class Projection(models.Model):
 class ProjectionSnapshot(models.Model):
     """What we projected for a week, frozen at kickoff. ESPN drops past projections, so this can't be backfilled."""
 
+    league = models.ForeignKey(League, on_delete=models.CASCADE, related_name="projection_snapshots")
     player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name="projection_snapshots")
     season = models.PositiveSmallIntegerField()
     week = models.PositiveSmallIntegerField()
@@ -41,7 +43,7 @@ class ProjectionSnapshot(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["player", "season", "week"], name="uniq_projection_snapshot")
+            models.UniqueConstraint(fields=["league", "player", "season", "week"], name="uniq_projection_snapshot")
         ]
 
 

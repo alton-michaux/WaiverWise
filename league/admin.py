@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from .models import League, LeaguePlayer, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
 
 
 @admin.register(League)
@@ -20,6 +20,13 @@ class PlayerAdmin(admin.ModelAdmin):
     list_filter = ["position"]
 
 
+@admin.register(LeaguePlayer)
+class LeaguePlayerAdmin(admin.ModelAdmin):
+    list_display = ["player", "league", "season_projection", "fa_status", "waiver_clears"]
+    list_filter = ["league", "fa_status"]
+    search_fields = ["player__name"]
+
+
 @admin.register(RosterEntry)
 class RosterEntryAdmin(admin.ModelAdmin):
     list_display = ["team", "player", "lineup_slot"]
@@ -28,8 +35,8 @@ class RosterEntryAdmin(admin.ModelAdmin):
 
 @admin.register(PlayerWeek)
 class PlayerWeekAdmin(admin.ModelAdmin):
-    list_display = ["player", "week", "points", "projected_points"]
-    list_filter = ["week"]
+    list_display = ["player", "league", "week", "points", "projected_points"]
+    list_filter = ["league", "week"]
     search_fields = ["player__name"]
 
 

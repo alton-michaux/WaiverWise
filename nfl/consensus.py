@@ -27,14 +27,14 @@ def weekly_projections(
     sleeper = {
         (pid, week): pts
         for pid, week, pts in SourceProjection.objects.filter(
-            player_id__in=ids, season=season, source="sleeper", week__in=weeks
+            league=league, player_id__in=ids, season=season, source="sleeper", week__in=weeks
         ).values_list("player_id", "week", "points")
     }
     espn_week = dict.fromkeys(ids)
     actual = {}
     kickoffs = week_kickoffs(season, league.current_week)
     history = defaultdict(list)
-    for w in PlayerWeek.objects.filter(player_id__in=ids, season=season).order_by("week"):
+    for w in PlayerWeek.objects.filter(league=league, player_id__in=ids, season=season).order_by("week"):
         if w.week == league.current_week:
             espn_week[w.player_id] = w.projected_points
             if w.breakdown:

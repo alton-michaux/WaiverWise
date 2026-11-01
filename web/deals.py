@@ -3,6 +3,8 @@
 import time
 from urllib.parse import urlencode
 
+from django.db.models import Q
+
 from league.models import SyncRun, Team
 from web.models import TradeDeals
 from web.services import TradeContext, trade_rows
@@ -14,8 +16,12 @@ SHOWN_PER_TARGET = 2  # keep the league-wide list from being twenty ways to get 
 
 
 def data_version(league) -> str:
-    """Changes whenever a sync could have changed the answer, including a sync run by hand."""
-    run = SyncRun.objects.order_by("-pk").values_list("pk", flat=True).first()
+    """Changes whenever a sync could have changed the answer, including a sync run by hand.
+
+    Runs with no league are steps every league shares, like projections.
+    """
+    runs = SyncRun.objects.filter(Q(league=league) | Q(league__isnull=True))
+    run = runs.order_by("-pk").values_list("pk", flat=True).first()
     return f"{run or 0}-{league.synced_at.isoformat()}"
 
 
@@ -96,7 +102,7 @@ def best_deals(team: Team, partner: Team | None = None, search: bool = True, bud
     missing = [p for p in partners if p.pk not in rows]
 
     if missing and search:
-        TradeDeals.objects.exclude(version=version).delete()
+        TradeDeals.objects.filter(team__league=league).exclude(version=version).delete()
         started = time.monotonic()
         ctx = TradeContext(league)
         for other in missing:

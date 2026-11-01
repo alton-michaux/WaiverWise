@@ -5,15 +5,15 @@ from .models import GameLine, Projection, ProjectionSnapshot, Usage
 
 @admin.register(Projection)
 class ProjectionAdmin(admin.ModelAdmin):
-    list_display = ["player", "week", "source", "points", "opponent"]
-    list_filter = ["source", "week"]
+    list_display = ["player", "league", "week", "source", "points", "opponent"]
+    list_filter = ["league", "source", "week"]
     search_fields = ["player__name"]
 
 
 @admin.register(ProjectionSnapshot)
 class ProjectionSnapshotAdmin(admin.ModelAdmin):
-    list_display = ["player", "week", "mean", "espn", "sleeper", "opponent", "captured_at"]
-    list_filter = ["week"]
+    list_display = ["player", "league", "week", "mean", "espn", "sleeper", "opponent", "captured_at"]
+    list_filter = ["league", "week"]
     search_fields = ["player__name"]
 
 
