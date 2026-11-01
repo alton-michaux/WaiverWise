@@ -1,9 +1,9 @@
-from django.conf import settings
 from django.db import connection
 from django.http import JsonResponse
 from django.shortcuts import render
 
-from league.models import League, Team
+from league.models import League, Membership
+from web import services
 
 HEALTH_PATH = "/health/"
 
@@ -26,29 +26,23 @@ class HealthCheckMiddleware:
         return JsonResponse({"status": "ok"})
 
 
-class MissingLeagueDataMiddleware:
-    """Show setup guidance instead of a 500 when the league hasn't been synced yet.
+class LeagueScopeMiddleware:
+    """Decide which league this request is about, from the user's memberships and nothing else.
 
-    Every page starts from League.objects.latest() and the user's Team, so an empty
-    database (fresh deploy, first sync not run) or a wrong ESPN_MY_TEAM_ID lands here.
+    Someone with no league gets an explanation instead of a 500. It's an error status so
+    the service worker doesn't save it as the offline copy of the page.
     """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        request.memberships = services.memberships_of(request.user)
+        request.membership = services.active_membership(request, request.memberships)
+        request.league = request.membership.league if request.membership else None
         return self.get_response(request)
 
     def process_exception(self, request, exception):
-        if isinstance(exception, League.DoesNotExist):
-            reason = "no-league"
-        elif isinstance(exception, Team.DoesNotExist):
-            reason = "no-team"
-        else:
+        if not isinstance(exception, Membership.DoesNotExist):
             return None
-        return render(
-            request,
-            "web/no_data.html",
-            {"reason": reason, "team_id": settings.ESPN_MY_TEAM_ID},
-            status=503,
-        )
+        return render(request, "web/no_data.html", {"has_league": League.objects.exists()}, status=403)

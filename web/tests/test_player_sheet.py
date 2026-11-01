@@ -1,11 +1,10 @@
 from datetime import timedelta
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from analysis.matchups import GOOD, TOUGH, Rating
-from league.models import League, Player, PlayerWeek, ProGame, Team
+from league.models import League, LeaguePlayer, Player, PlayerWeek, ProGame, Team
 from nfl.consensus import playoff_weeks
 from nfl.models import GameLine, Usage
 from web import services
@@ -16,8 +15,7 @@ SEASON, WEEK = 2026, 8
 
 
 @pytest.fixture
-def league(settings):
-    settings.ESPN_MY_TEAM_ID = 1
+def league():
     league = League.objects.create(
         espn_id=1, season=SEASON, name="L", team_count=2, current_week=WEEK, reg_season_weeks=14, final_week=17,
         lineup_slots={"WR": 1, "K": 1, "BE": 1},
@@ -27,9 +25,8 @@ def league(settings):
 
 
 @pytest.fixture
-def signed_in(client, league):
-    client.force_login(get_user_model().objects.create_user("u", password="p"))
-    return client
+def signed_in(sign_in, league):
+    return sign_in(league.teams.get())
 
 
 @pytest.fixture
@@ -38,7 +35,9 @@ def receiver(league):
     for week in range(WEEK, 18):
         if week != 10:  # bye
             ProGame.objects.create(season=SEASON, week=week, team="BUF", opponent=f"O{week}", kickoff=kickoff)
-    return Player.objects.create(espn_id=1, name="Keon Coleman", position="WR", pro_team="BUF")
+    player = Player.objects.create(espn_id=1, name="Keon Coleman", position="WR", pro_team="BUF")
+    LeaguePlayer.objects.create(league=league, player=player)
+    return player
 
 
 def sheet(signed_in, player):

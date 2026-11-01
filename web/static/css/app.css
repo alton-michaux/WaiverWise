@@ -164,7 +164,7 @@ html.navigating main { opacity: .5; transition: opacity .15s; }
   text-decoration: none;
 }
 .sheet-list form { margin: 0; }
-.sheet-list a[aria-current="true"] { font-weight: 600; color: var(--pico-primary); }
+.sheet-list a[aria-current="true"], .sheet-list button[aria-current="true"] { font-weight: 600; color: var(--pico-primary); }
 .sheet-list small { flex: none; color: var(--pico-muted-color); }
 .sheet [data-close-dialog] { width: 100%; margin: 0; }
 

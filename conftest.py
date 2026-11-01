@@ -1,6 +1,6 @@
 import pytest
 
-from league.models import League, LeaguePlayer, Player, PlayerWeek, Team
+from league.models import League, LeaguePlayer, Membership, Player, PlayerWeek, Team
 
 
 def make_league(espn_id: int, name: str, rec_points: float) -> League:
@@ -18,6 +18,20 @@ def make_league(espn_id: int, name: str, rec_points: float) -> League:
     Team.objects.create(league=league, espn_id=1, name=f"{name} Team 1", abbrev="ONE")
     Team.objects.create(league=league, espn_id=2, name=f"{name} Team 2", abbrev="TWO")
     return league
+
+
+@pytest.fixture
+def sign_in(client, django_user_model):
+    """Log the test client in as a user who claims these teams."""
+
+    def _sign_in(*teams, username="u"):
+        user, _ = django_user_model.objects.get_or_create(username=username)
+        for team in teams:
+            Membership.objects.create(user=user, league=team.league, team=team)
+        client.force_login(user)
+        return client
+
+    return _sign_in
 
 
 @pytest.fixture

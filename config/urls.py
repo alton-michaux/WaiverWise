@@ -12,6 +12,7 @@ urlpatterns = [
     path("trades/", views.trades, name="trades"),
     path("trades/best/", views.best_deals, name="best_deals"),
     path("player/<int:pk>/", views.player_sheet, name="player_sheet"),
+    path("league/switch/", views.switch_league, name="switch_league"),
     path("explain/<str:kind>/", views.explain, name="explain"),
     path("login/", auth_views.LoginView.as_view(template_name="web/login.html", redirect_authenticated_user=True), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),

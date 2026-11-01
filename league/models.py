@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import F, Max, QuerySet
 
@@ -43,6 +45,29 @@ class Team(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Membership(models.Model):
+    """A user's claim on a team, which is also what lets them see the league."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memberships")
+    league = models.ForeignKey(League, on_delete=models.CASCADE, related_name="memberships")
+    team = models.OneToOneField(Team, on_delete=models.CASCADE, related_name="membership")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "league"], name="uniq_membership")]
+
+    def __str__(self):
+        return f"{self.user} in {self.league}"
+
+    def clean(self):
+        # the database can't enforce this, and a mismatch would show one league's team inside another
+        if self.team_id and self.league_id and self.team.league_id != self.league_id:
+            raise ValidationError({"team": "This team isn't in that league."})
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
 
 class Player(models.Model):

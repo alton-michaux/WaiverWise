@@ -68,11 +68,13 @@ class Command(BaseCommand):
         except Exception:
             # the app doesn't read these, so a missed snapshot only costs the next sync's refresh
             log.exception("snapshotting projections failed")
-        try:
-            call_command("refresh_best_deals", stdout=self.stdout, stderr=self.stderr)
-        except Exception:
-            # the Trades tab searches on demand when this is missing, so it isn't worth failing the sync
-            log.exception("refreshing best deals failed")
+        # full syncs only: game-day syncs outdate the result within 30 minutes, and each team costs a full search
+        if not only or set(STEPS) <= set(only):
+            try:
+                call_command("refresh_best_deals", stdout=self.stdout, stderr=self.stderr)
+            except Exception:
+                # the Trades tab searches on demand when this is missing, so it isn't worth failing the sync
+                log.exception("refreshing best deals failed")
         self._prune_runs()
         if failed:
             raise CommandError(f"failed steps: {', '.join(failed)}")

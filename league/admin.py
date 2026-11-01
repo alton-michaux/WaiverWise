@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import League, LeaguePlayer, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from .models import League, LeaguePlayer, Matchup, Membership, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
 
 
 @admin.register(League)
@@ -11,6 +11,12 @@ class LeagueAdmin(admin.ModelAdmin):
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
     list_display = ["name", "standing", "wins", "losses", "points_for"]
+
+
+@admin.register(Membership)
+class MembershipAdmin(admin.ModelAdmin):
+    list_display = ["user", "league", "team"]
+    list_filter = ["league"]
 
 
 @admin.register(Player)

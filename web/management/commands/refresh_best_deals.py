@@ -1,21 +1,19 @@
 import time
 
-from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from league.models import League
+from league.models import Team, active_leagues
 from web.deals import best_deals
 
 
 class Command(BaseCommand):
-    help = "Search your team's trade deals ahead of time, so the Trades tab opens instantly on a slow server."
+    help = "Search claimed teams' trade deals ahead of time, so the Trades tab opens instantly on a slow server."
 
     def handle(self, *args, **opts):
-        league = League.objects.order_by("-season").first()
-        team = league and league.teams.filter(espn_id=settings.ESPN_MY_TEAM_ID).first()
-        if not team:
-            self.stdout.write("no team to search deals for, skipping")
+        teams = Team.objects.filter(membership__isnull=False, league__in=active_leagues()).select_related("league")
+        if not teams:
+            self.stdout.write("no claimed teams to search deals for, skipping")
             return
         started = time.monotonic()
-        result = best_deals(team, budget=float("inf"))
-        self.stdout.write(f"[best deals] {result['total']} found in {time.monotonic() - started:.1f}s")
+        found = sum(best_deals(team, budget=float("inf"))["total"] for team in teams.order_by("pk"))
+        self.stdout.write(f"[best deals] {found} found for {len(teams)} teams in {time.monotonic() - started:.1f}s")

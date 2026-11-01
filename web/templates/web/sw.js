@@ -40,13 +40,16 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// the login page asks us to forget cached pages so a signed-out device doesn't keep league data
+// asked to forget saved pages on signing out, so a device doesn't keep league data, and on switching
+// leagues, since pages are saved by URL. waitUntil keeps the worker alive while the page navigates away.
 self.addEventListener("message", (event) => {
   if (event.data === "clear-pages") {
-    caches.open(CACHE).then((cache) =>
-      cache.keys().then((reqs) => reqs.forEach((r) => {
-        if (PAGES.includes(new URL(r.url).pathname)) cache.delete(r);
-      }))
+    event.waitUntil(
+      caches.open(CACHE).then((cache) =>
+        cache.keys().then((reqs) => Promise.all(
+          reqs.filter((r) => PAGES.includes(new URL(r.url).pathname)).map((r) => cache.delete(r))
+        ))
+      )
     );
   }
 });

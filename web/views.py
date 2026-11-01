@@ -3,10 +3,11 @@ from django.contrib.auth.decorators import login_not_required
 from django.http import Http404, JsonResponse
 from django.templatetags.static import static
 from django.views.decorators.cache import cache_control
+from django.views.decorators.http import require_POST
 from django.shortcuts import get_object_or_404, redirect, render
 
 from analysis.startsit import MODES
-from league.models import Player
+from league.models import Membership, league_players
 from nfl.consensus import remaining_weeks
 from web import deals, narrate, services
 
@@ -15,31 +16,53 @@ def home(request):
     return redirect("startsit")
 
 
-def _team(request, league):
+def _membership(request) -> Membership:
+    """Every league page starts here; LeagueScopeMiddleware explains the miss to the user."""
+    if request.membership is None:
+        raise Membership.DoesNotExist
+    return request.membership
+
+
+def _team(request):
+    membership = _membership(request)
     team_id = request.GET.get("team")
     if team_id:
         if not team_id.isdigit():
             raise Http404
-        return get_object_or_404(league.teams, espn_id=team_id)
-    return services.remembered_team(request, league) or services.my_team(league)
+        return get_object_or_404(membership.league.teams, espn_id=team_id)
+    return services.remembered_team(request, membership) or membership.team
+
+
+def _remember(response, name, value):
+    """A cookie, not the session: SESSION_SAVE_EVERY_REQUEST means a trade finder request
+    still running when you switch would save its older session over the new choice.
+    """
+    response.set_cookie(
+        name,
+        value,
+        max_age=settings.SESSION_COOKIE_AGE,
+        secure=settings.SESSION_COOKIE_SECURE,
+        httponly=True,
+        samesite="Lax",
+    )
 
 
 def _page(request, template, context):
-    """Render a full page, remembering a team picked with ?team= for the other tabs.
-
-    A cookie, not the session: SESSION_SAVE_EVERY_REQUEST means a trade finder request
-    still running when you switch teams would save its older session over the new choice.
-    """
+    """Render a full page, remembering a team picked with ?team= for the other tabs."""
     response = render(request, template, context)
     if "team" in request.GET:
-        response.set_cookie(
-            services.TEAM_COOKIE,
-            context["team"].espn_id,
-            max_age=settings.SESSION_COOKIE_AGE,
-            secure=settings.SESSION_COOKIE_SECURE,
-            httponly=True,
-            samesite="Lax",
-        )
+        _remember(response, services.team_cookie(request.membership), context["team"].espn_id)
+    return response
+
+
+@require_POST
+def switch_league(request):
+    chosen = request.POST.get("league")
+    membership = next((m for m in request.memberships if str(m.league_id) == chosen), None)
+    if membership is None:
+        raise Http404
+    response = redirect("startsit")
+    _remember(response, services.league_cookie(request.user), membership.league_id)
     return response
 
 
@@ -52,8 +75,7 @@ START_SIT_MODES = [
 
 
 def startsit(request):
-    league = services.current_league()
-    team = _team(request, league)
+    team = _team(request)
     mode = request.GET.get("mode", "mean")
     if mode not in MODES:
         mode = "mean"
@@ -65,16 +87,14 @@ def startsit(request):
 
 def moves_badge(request):
     """HTMX partial: the Start/Sit tab's count of moves waiting, loaded after the page so no tab waits on it."""
-    league = services.current_league()
-    return render(request, "web/_moves_badge.html", {"count": services.move_count(_team(request, league))})
+    return render(request, "web/_moves_badge.html", {"count": services.move_count(_team(request))})
 
 
 WAIVER_POSITIONS = ["QB", "RB", "WR", "TE", "K", "D/ST"]
 
 
 def waivers(request):
-    league = services.current_league()
-    team = _team(request, league)
+    team = _team(request)
     position = request.GET.get("position") or None
     if position not in WAIVER_POSITIONS:
         position = None
@@ -84,8 +104,8 @@ def waivers(request):
 
 
 def _trade_context(request) -> dict:
-    league = services.current_league()
-    team = _team(request, league)
+    team = _team(request)
+    league = team.league
     others = league.teams.exclude(pk=team.pk).order_by("name")
     partner_id = request.GET.get("partner")
     partner = get_object_or_404(others, espn_id=partner_id) if partner_id else others.first()
@@ -116,40 +136,38 @@ def trades(request):
     # a verdict or an edit of one means the builder; otherwise lead with the best deals
     if request.GET.get("view") == "build" or "give" in request.GET or "get" in request.GET:
         return _page(request, "web/trades.html", {**_trade_context(request), "view": "build"})
-    league = services.current_league()
-    team = _team(request, league)
+    team = _team(request)
+    league = team.league
     context = {"league": league, "team": team, "weeks": remaining_weeks(league), "view": "best"}
-    # already searched (the sync does this for your team): show it now rather than after another request
+    # already searched (the nightly sync does this for claimed teams): show it now rather than after another request
     stored = deals.best_deals(team, search=False)
     return _page(request, "web/trades.html", {**context, "best": stored if stored["done"] else None})
 
 
 def best_deals(request):
     """HTMX partial: ranked deals, with progress while a slow server works through the league."""
-    league = services.current_league()
-    team = _team(request, league)
+    team = _team(request)
     partner_id = request.GET.get("partner")
-    partner = get_object_or_404(league.teams.exclude(pk=team.pk), espn_id=partner_id) if partner_id else None
+    partner = get_object_or_404(team.league.teams.exclude(pk=team.pk), espn_id=partner_id) if partner_id else None
     return render(request, "web/_best_deals.html", {"best": deals.best_deals(team, partner)})
 
 
 def player_sheet(request, pk):
     """HTMX partial: the detail behind a player's row, loaded when the sheet opens."""
-    league = services.current_league()
-    return render(request, "web/_player_sheet.html", services.player_sheet(league, get_object_or_404(Player, pk=pk)))
+    league = _membership(request).league
+    player = get_object_or_404(league_players(league), pk=pk)  # Player rows are shared, so stay inside this league's pool
+    return render(request, "web/_player_sheet.html", services.player_sheet(league, player))
 
 
 def _startsit_payload(request):
-    league = services.current_league()
     mode = request.GET.get("mode", "mean")
-    return narrate.startsit_payload(services.start_sit(_team(request, league), mode if mode in MODES else "mean"))
+    return narrate.startsit_payload(services.start_sit(_team(request), mode if mode in MODES else "mean"))
 
 
 def _waivers_payload(request):
-    league = services.current_league()
     position = request.GET.get("position") or None
     return narrate.waivers_payload(
-        services.waivers(_team(request, league), position if position in WAIVER_POSITIONS else None)
+        services.waivers(_team(request), position if position in WAIVER_POSITIONS else None)
     )
 
 
