@@ -20,6 +20,8 @@ def _membership(request) -> Membership:
     """Every league page starts here; LeagueScopeMiddleware explains the miss to the user."""
     if request.membership is None:
         raise Membership.DoesNotExist
+    if not request.membership.league.has_data:
+        raise services.LeagueNotReady
     return request.membership
 
 
@@ -79,7 +81,7 @@ def startsit(request):
     mode = request.GET.get("mode", "mean")
     if mode not in MODES:
         mode = "mean"
-    context = services.start_sit(team, mode)
+    context = services.start_sit(team, mode, viewer=request.user)
     context["mode_options"] = START_SIT_MODES
     context["mode_label"], context["mode_note"] = next((label, note) for v, label, note in START_SIT_MODES if v == mode)
     return _page(request, "web/startsit.html", context)
@@ -87,7 +89,7 @@ def startsit(request):
 
 def moves_badge(request):
     """HTMX partial: the Start/Sit tab's count of moves waiting, loaded after the page so no tab waits on it."""
-    return render(request, "web/_moves_badge.html", {"count": services.move_count(_team(request))})
+    return render(request, "web/_moves_badge.html", {"count": services.move_count(_team(request), request.user)})
 
 
 WAIVER_POSITIONS = ["QB", "RB", "WR", "TE", "K", "D/ST"]
@@ -98,7 +100,7 @@ def waivers(request):
     position = request.GET.get("position") or None
     if position not in WAIVER_POSITIONS:
         position = None
-    context = services.waivers(team, position)
+    context = services.waivers(team, position, viewer=request.user)
     context["positions"] = WAIVER_POSITIONS
     return _page(request, "web/waivers.html", context)
 
@@ -109,7 +111,7 @@ def _trade_context(request) -> dict:
     others = league.teams.exclude(pk=team.pk).order_by("name")
     partner_id = request.GET.get("partner")
     partner = get_object_or_404(others, espn_id=partner_id) if partner_id else others.first()
-    ctx = services.TradeContext(league)
+    ctx = services.TradeContext(league, request.user)
 
     give = [int(i) for i in request.GET.getlist("give") if i.isdigit()]
     get = [int(i) for i in request.GET.getlist("get") if i.isdigit()]
@@ -140,7 +142,7 @@ def trades(request):
     league = team.league
     context = {"league": league, "team": team, "weeks": remaining_weeks(league), "view": "best"}
     # already searched (the nightly sync does this for claimed teams): show it now rather than after another request
-    stored = deals.best_deals(team, search=False)
+    stored = deals.best_deals(team, search=False, viewer=request.user)
     return _page(request, "web/trades.html", {**context, "best": stored if stored["done"] else None})
 
 
@@ -149,7 +151,7 @@ def best_deals(request):
     team = _team(request)
     partner_id = request.GET.get("partner")
     partner = get_object_or_404(team.league.teams.exclude(pk=team.pk), espn_id=partner_id) if partner_id else None
-    return render(request, "web/_best_deals.html", {"best": deals.best_deals(team, partner)})
+    return render(request, "web/_best_deals.html", {"best": deals.best_deals(team, partner, viewer=request.user)})
 
 
 def player_sheet(request, pk):
@@ -161,13 +163,13 @@ def player_sheet(request, pk):
 
 def _startsit_payload(request):
     mode = request.GET.get("mode", "mean")
-    return narrate.startsit_payload(services.start_sit(_team(request), mode if mode in MODES else "mean"))
+    return narrate.startsit_payload(services.start_sit(_team(request), mode if mode in MODES else "mean", viewer=request.user))
 
 
 def _waivers_payload(request):
     position = request.GET.get("position") or None
     return narrate.waivers_payload(
-        services.waivers(_team(request), position if position in WAIVER_POSITIONS else None)
+        services.waivers(_team(request), position if position in WAIVER_POSITIONS else None, viewer=request.user)
     )
 
 

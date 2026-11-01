@@ -1,0 +1,22 @@
+{% extends "web/base.html" %}
+{% block title %}Pick your team · WaiverWise{% endblock %}
+{% block content %}
+<article class="login">
+  <h2>Which team is yours?</h2>
+  <p class="muted">{{ joining.name }}</p>
+  {% if error %}<p class="move-out" role="alert">{{ error }}</p>{% endif %}
+  {% if open_teams %}
+  <form method="post">
+    {% csrf_token %}
+    <fieldset>
+      {% for t in open_teams %}
+      <label><input type="radio" name="team" value="{{ t.espn_id }}" required> {{ t.name }}</label>
+      {% endfor %}
+    </fieldset>
+    <button type="submit">This is my team</button>
+  </form>
+  {% else %}
+  <p>Every team in this league has been claimed. If one of them is yours, ask the person who invited you to fix it.</p>
+  {% endif %}
+</article>
+{% endblock %}

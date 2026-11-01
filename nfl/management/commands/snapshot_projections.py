@@ -10,12 +10,15 @@ from nfl.models import GameLine, Projection, ProjectionSnapshot
 class Command(BaseCommand):
     help = "Save this week's projections for games not yet started, so the last pre-kickoff value is what stays."
 
-    def handle(self, *args, **opts):
+    def add_arguments(self, parser):
+        parser.add_argument("--league", type=int, help="just this league")
+
+    def handle(self, *args, league=None, **opts):
         leagues = active_leagues()
         if not leagues:
             self.stdout.write("no league to snapshot, skipping")
             return
-        for league in leagues:
+        for league in leagues.filter(pk=league) if league else leagues:
             self._snapshot(league)
 
     def _snapshot(self, league):

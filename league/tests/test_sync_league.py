@@ -62,7 +62,7 @@ def league_data(points_bump=0.0, injury="ACTIVE"):
         teams=teams,
         players=players,
         pro_games=[ProGameData(w, "BUF", "MIA", datetime(2026, 9, 10, 17, tzinfo=timezone.utc)) for w in WEEKS],
-        pending=[PendingMoveData("abc", "waiver", 1, [{"player_id": 1000, "from_team": 0, "to_team": 1, "type": "ADD"}])],
+        pending=[PendingMoveData("abc", "trade", 1, [{"player_id": 1000, "from_team": 0, "to_team": 1, "type": "ADD"}])],
     )
 
 

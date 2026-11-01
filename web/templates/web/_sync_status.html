@@ -1,0 +1,5 @@
+{% if failed %}
+<p class="move-out">The first sync didn't work. The next scheduled sync will try again, usually within a day.</p>
+{% else %}
+<p aria-busy="true">Pulling your league from ESPN. This usually takes a minute or two.</p>
+{% endif %}

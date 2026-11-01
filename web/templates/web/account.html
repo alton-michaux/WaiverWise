@@ -1,0 +1,37 @@
+{% extends "web/base.html" %}
+{% block title %}Your account · WaiverWise{% endblock %}
+{% block content %}
+<article>
+  <h2>Your leagues</h2>
+  {% for row in rows %}
+  <section>
+    <h3>{{ row.league.name }} <small class="muted">{{ row.league.season }}</small></h3>
+    <p>{{ row.team.name }}.
+      {% if row.credential.status == "expired" %}ESPN stopped accepting your login. <a href="{% url 'connect' %}?league={{ row.league.espn_id }}">Reconnect</a>.
+      {% elif row.credential %}Your ESPN login is saved, encrypted.
+      {% elif row.league.is_public %}Public league, so no login is saved.
+      {% else %}No login of yours is saved.{% endif %}</p>
+    {% if row.credential %}
+    <form method="post" action="{% url 'disconnect_league' row.league.pk %}" onsubmit="return confirm('Delete your saved ESPN login for this league?')">{% csrf_token %}
+      <button type="submit" class="secondary outline">Delete my saved login</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{% url 'leave_league' row.league.pk %}" onsubmit="return confirm('Leave this league? If you are the last member, its data is deleted too.')">{% csrf_token %}
+      <button type="submit" class="secondary outline">Leave this league</button>
+    </form>
+  </section>
+  {% empty %}
+  <p>None yet. <a href="{% url 'connect' %}">Connect a league</a>.</p>
+  {% endfor %}
+</article>
+<article>
+  <h2>Delete your account</h2>
+  <p>This deletes your saved ESPN logins and your place in every league, right away. A league with no members left is deleted too.</p>
+  {% if error == "password" %}<p class="move-out" role="alert">That password wasn't right.</p>{% endif %}
+  {% if error == "superuser" %}<p class="move-out" role="alert">A superuser account can't delete itself here. Use Admin.</p>{% endif %}
+  <form method="post" action="{% url 'delete_account' %}" onsubmit="return confirm('Delete your account for good?')">{% csrf_token %}
+    <label>Your password <input type="password" name="password" autocomplete="current-password" required></label>
+    <button type="submit" class="secondary">Delete my account</button>
+  </form>
+</article>
+{% endblock %}

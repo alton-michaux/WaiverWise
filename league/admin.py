@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import League, LeaguePlayer, Matchup, Membership, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from .models import EspnCredential, League, LeaguePlayer, Matchup, Membership, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
 
 
 @admin.register(League)
@@ -17,6 +17,22 @@ class TeamAdmin(admin.ModelAdmin):
 class MembershipAdmin(admin.ModelAdmin):
     list_display = ["user", "league", "team"]
     list_filter = ["league"]
+
+
+@admin.register(EspnCredential)
+class EspnCredentialAdmin(admin.ModelAdmin):
+    """Status only: ciphertext has no business on a page, and staff can't add or edit someone's login."""
+
+    list_display = ["user", "league", "status", "last_ok_at"]
+    list_filter = ["status", "league"]
+    fields = ["user", "league", "status", "last_ok_at"]
+    readonly_fields = fields
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Player)

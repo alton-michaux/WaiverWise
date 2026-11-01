@@ -59,6 +59,8 @@
           </ul>
           {% endif %}
           <ul class="sheet-list">
+            <li><a href="{% url 'connect' %}">Connect a league</a></li>
+            <li><a href="{% url 'account' %}">Your account</a></li>
             {% if user.is_staff %}<li><a href="{% url 'admin:index' %}">Admin</a></li>{% endif %}
             <li>
               <form method="post" action="{% url 'logout' %}">{% csrf_token %}
@@ -73,6 +75,7 @@
     </div>
   </header>
   <main class="container">
+    {% if user.is_authenticated and reconnect_league %}<div class="banner" role="alert">ESPN stopped accepting your login for {{ reconnect_league.name }}. <a href="{% url 'connect' %}?league={{ reconnect_league.espn_id }}">Reconnect</a></div>{% endif %}
     {% if user.is_authenticated and sync_problem %}<div class="banner" role="alert">{{ sync_problem }}</div>{% endif %}
     {% block content %}{% endblock %}
   </main>

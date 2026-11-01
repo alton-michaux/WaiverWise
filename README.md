@@ -2,6 +2,8 @@
 
 Start/sit, waiver, and trade analysis for ESPN fantasy football leagues.
 
+Sign in, connect your ESPN league, and pick your team. Public leagues need nothing else. Private leagues need one member's `espn_s2` and `SWID` cookies, saved encrypted. Every member with cookies gets their own waiver claims, which nobody else sees.
+
 Supports head-to-head points leagues with QB, RB, WR, TE, FLEX (`RB/WR`, `WR/TE`, `RB/WR/TE`), superflex (`OP`), D/ST and K slots. Category, roto and IDP leagues are refused at sync. Scoring rules Sleeper can't price, like 40+ yard TD or 300-yard bonuses, count only through the ESPN half of the projection consensus.
 
 Data: ESPN (league, rosters, scoring, actuals, current-week projections), Sleeper (weekly projections for every remaining week, scored with your league's rules), nflverse (id crosswalk, usage).
@@ -9,22 +11,17 @@ Data: ESPN (league, rosters, scoring, actuals, current-week projections), Sleepe
 ## Setup
 
 ```sh
-cp .env.example .env   # fill in ESPN_LEAGUE_ID, ESPN_S2, ESPN_SWID, SECRET_KEY
+cp .env.example .env   # fill in SECRET_KEY and CREDENTIAL_KEY
 docker compose up -d --build
 docker compose exec web python manage.py migrate
-docker compose exec web python manage.py sync_all
-```
-
-App: http://localhost:8000 (start/sit, waivers, trades). Every page requires sign-in, so create an account and attach it to your team (the `teamId` in your ESPN team page's URL):
-
-```sh
 docker compose exec web python manage.py createsuperuser
-docker compose exec web python manage.py bootstrap_owner <username> <team id>
 ```
 
-A user only sees leagues they have a membership in. `bootstrap_owner` sets up your own, and Admin → Memberships handles anyone else or fixes a wrong claim.
+App: http://localhost:8000. Sign in and use **Connect a league**. Without `GITHUB_DISPATCH_TOKEN` nothing starts the first sync for you, so run it yourself: `docker compose exec web python manage.py sync_all --league <id>` (the waiting page shows the id to staff).
 
-`ESPN_S2` / `ESPN_SWID` are cookies from fantasy.espn.com (devtools → Application → Cookies). Compose reads `.env` at container creation, so run `docker compose up -d` after editing it.
+A user only sees leagues they have a membership in. Admin → Memberships fixes a wrong team claim.
+
+`bootstrap_owner <username> <team id>` attaches an existing account to a team already in the database. With `ESPN_S2` and `ESPN_SWID` set, it also saves them as that account's encrypted login, which is how a league from before the connect flow gets its cookies.
 
 After changing dependencies, rebuild with fresh venv volumes or the containers keep the old one: `docker compose up -d --build --renew-anon-volumes`.
 
@@ -70,9 +67,8 @@ CI (`.github/workflows/tests.yml`) runs the suite against Postgres 16 on every P
 
 1. Render dashboard → **New → Blueprint** → pick this repo. It reads `render.yaml`.
 2. Before applying, set `region` in `render.yaml` to your database's region (the hostname in its URL shows it, e.g. `dpg-xxxx-a.ohio-postgres.render.com`; this repo uses `ohio`). The internal database URL only works within the same region.
-3. Fill in the prompted values: `DATABASE_URL` (the database's **Internal** URL), and `ANTHROPIC_API_KEY`. `SECRET_KEY` is generated for you. ESPN cookies aren't needed on Render, since syncs run in GitHub Actions.
-4. Create an account once it's live: Render dashboard → the service → **Shell**, then `python manage.py createsuperuser`.
-5. After the first sync (step 2), attach the account to your team: `python manage.py bootstrap_owner <username> <team id>`. If the service has no Shell, run it from your machine with `DATABASE_URL` set to the database's external URL. Don't put this in a workflow, since Actions logs are public.
+3. Fill in the prompted values: `DATABASE_URL` (the database's **Internal** URL), `ANTHROPIC_API_KEY`, `CREDENTIAL_KEY` and `GITHUB_DISPATCH_TOKEN`. `SECRET_KEY` is generated for you. `GITHUB_DISPATCH_TOKEN` is a fine-grained token limited to this repo with **Actions: read and write**, which lets the app start a new league's first sync.
+4. Create an account once it's live: from your machine, run `python manage.py createsuperuser` with `DATABASE_URL` set to the database's external URL. Then sign in and connect a league. Don't do this in a workflow, since Actions logs are public.
 
 The service deploys from `main` (the default branch). Merging `dev` into `main` is a release.
 
@@ -84,9 +80,10 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 |---|---|
 | `DATABASE_URL` | the database's **External** URL with `?sslmode=require` on the end |
 | `SECRET_KEY` | any random string (`python3 -c 'import secrets; print(secrets.token_urlsafe(50))'`) |
-| `ESPN_LEAGUE_ID`, `ESPN_SEASON`, `ESPN_S2`, `ESPN_SWID` | same values as `.env` |
+| `CREDENTIAL_KEY` | same value as on Render |
+| `ESPN_SEASON` | optional, the season new leagues connect to (default in `config/settings.py`) |
 
-Then **Actions → Sync league data → Run workflow** to do the first sync by hand. After that it runs on its own. A failed sync (for example, expired ESPN cookies) fails the workflow and GitHub emails you.
+Syncs then run on their own. A failed sync fails the workflow and GitHub emails you. Expired ESPN cookies don't count as a failure: the app asks that member to reconnect. A league nobody has opened in 14 days stops syncing until someone does. Logs on this public repo carry only ids and counts.
 
 GitHub cron uses UTC and can run a few minutes late when GitHub is busy.
 
@@ -106,4 +103,8 @@ It opens full-screen like a native app. Recently viewed pages stay readable offl
 
 ### When ESPN cookies expire
 
-A red banner appears in the app and the sync workflow fails. Grab fresh `espn_s2` / `SWID` cookies and update the `ESPN_S2` / `ESPN_SWID` GitHub Actions secrets. Render doesn't hold them: only the sync workflow talks to ESPN. Locally, update `.env`.
+The member whose cookies stopped working sees a banner with a reconnect link, and syncs carry on with any other member's. If nobody's cookies work, everyone in the league sees that its data isn't updating. Only the sync workflow and the connect page talk to ESPN.
+
+### Rotating `CREDENTIAL_KEY`
+
+Put the new key first and keep the old one after a comma (`CREDENTIAL_KEY=new,old`) on Render and in Actions. New saves use the new key, and the old one still reads existing rows until they're re-saved.

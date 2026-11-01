@@ -13,9 +13,13 @@ from nfl.models import Projection
 class Command(BaseCommand):
     help = "Pull Sleeper projections for the current week through the end of the season, scored for each league."
 
-    def handle(self, *args, **opts):
+    def add_arguments(self, parser):
+        parser.add_argument("--league", type=int, help="just this league")
+
+    def handle(self, *args, league=None, **opts):
         fetched = {}  # Sleeper's numbers don't depend on the league, so each week is only fetched once
-        for league in active_leagues():
+        leagues = active_leagues()
+        for league in leagues.filter(pk=league) if league else leagues:
             players = {p.sleeper_id: p for p in Player.objects.filter(league_entries__league=league).exclude(sleeper_id="")}
             for week in remaining_weeks(league):
                 if (league.season, week) not in fetched:

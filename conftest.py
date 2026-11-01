@@ -1,6 +1,14 @@
 import pytest
+from cryptography.fernet import Fernet
 
 from league.models import League, LeaguePlayer, Membership, Player, PlayerWeek, Team
+
+
+@pytest.fixture(autouse=True)
+def credential_key(settings):
+    settings.CREDENTIAL_KEYS = [Fernet.generate_key().decode()]
+    settings.ESPN_S2 = settings.ESPN_SWID = None
+    settings.GITHUB_DISPATCH_TOKEN = None
 
 
 def make_league(espn_id: int, name: str, rec_points: float) -> League:

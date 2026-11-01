@@ -1,36 +1,97 @@
-from django.conf import settings
+import logging
+
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from espn_api.requests.espn_requests import ESPNAccessDenied
 
 from analysis.scoring import unscored_stats
 from league import espn_client
 from league.bulk import upsert
-from league.models import League, LeaguePlayer, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from league.models import EspnCredential, League, LeaguePlayer, Matchup, Membership, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
 from league.support import check_supported
+
+log = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Pull league settings, teams, rosters, matchups and player weeks from ESPN."
+    help = "Pull one league's settings, teams, rosters, matchups and player weeks from ESPN."
 
-    def handle(self, *args, **opts):
-        if not settings.ESPN_LEAGUE_ID:
-            raise CommandError("ESPN_LEAGUE_ID is not set")
-        data = espn_client.fetch_league(
-            settings.ESPN_LEAGUE_ID, settings.ESPN_SEASON, settings.ESPN_S2, settings.ESPN_SWID
-        )
+    def add_arguments(self, parser):
+        parser.add_argument("league", type=int, help="the league's id in this database")
+
+    def handle(self, *args, league, **opts):
+        league = League.objects.get(pk=league)
+        data = self._fetch(league)
         if problems := check_supported(data):
             raise CommandError(" ".join(problems))
         with transaction.atomic():
             league = self._save(data)
+        claims = self._save_claims(league)
+        # ids and counts only: Actions logs are public
         self.stdout.write(
             self.style.SUCCESS(
-                f"Synced {league}: week {league.current_week}, {len(data.teams)} teams, "
-                f"{len(data.players)} players, {len(data.pending)} pending moves"
+                f"Synced league {league.pk}: week {league.current_week}, {len(data.teams)} teams, "
+                f"{len(data.players)} players, {claims} waiver claims"
             )
         )
         if missing := unscored_stats(data.scoring):
-            # just a count: these logs are public, and a league's rules are its own business
             self.stdout.write(f"{len(missing)} scoring rules have no Sleeper projection")
+
+    def _fetch(self, league: League) -> espn_client.LeagueData:
+        """Without cookies if the league is public, else with each member's until one works.
+
+        Expired cookies are tried last rather than never, so a false alarm from ESPN heals itself.
+        """
+        if league.is_public:
+            try:
+                return espn_client.fetch_league(league.espn_id, league.season, None, None)
+            except ESPNAccessDenied:
+                league.is_public = False
+                league.save(update_fields=["is_public"])
+        credentials = sorted(league.espn_credentials.all(), key=lambda c: (c.status != EspnCredential.OK, c.pk))
+        for credential in credentials:
+            espn_s2, swid = credential.cookies()
+            try:
+                data = espn_client.fetch_league(league.espn_id, league.season, espn_s2, swid)
+            except ESPNAccessDenied:
+                credential.mark_expired()
+                continue
+            credential.mark_ok()
+            return data
+        # everyone's cookies failed, or the league went public after connecting
+        data = espn_client.fetch_league(league.espn_id, league.season, None, None)
+        league.is_public = True
+        league.save(update_fields=["is_public"])
+        return data
+
+    def _save_claims(self, league: League) -> int:
+        """ESPN shows waiver claims only to their owner, so each member's come from their own cookies."""
+        members = dict(Membership.objects.filter(league=league).values_list("user_id", "team__espn_id"))
+        total = 0
+        for credential in league.espn_credentials.filter(status=EspnCredential.OK):
+            team = members.get(credential.user_id)
+            if team is None:
+                continue
+            espn_s2, swid = credential.cookies()
+            try:
+                moves = espn_client.fetch_claims(league.espn_id, league.season, league.current_week, espn_s2, swid)
+            except ESPNAccessDenied:
+                credential.mark_expired()
+                continue
+            except Exception as e:
+                # keep their last known claims; one member's hiccup isn't the league's
+                log.warning("claims for league %s failed: %s", league.pk, type(e).__name__)
+                continue
+            # a commissioner may see more than their own, and those aren't theirs to see here
+            mine = [m for m in moves if m.team_id == team]
+            with transaction.atomic():
+                PendingMove.objects.filter(league=league, owner_id=credential.user_id).delete()
+                PendingMove.objects.bulk_create(
+                    PendingMove(league=league, espn_id=m.espn_id, kind=m.kind, team_espn_id=m.team_id, items=m.items, owner_id=credential.user_id)
+                    for m in mine
+                )
+            total += len(mine)
+        return total
 
     def _save(self, data: espn_client.LeagueData) -> League:
         league, _ = League.objects.update_or_create(
@@ -44,6 +105,7 @@ class Command(BaseCommand):
                 final_week=data.final_week,
                 lineup_slots=data.lineup_slots,
                 scoring=data.scoring,
+                has_data=True,
             ),
         )
 
@@ -112,6 +174,7 @@ class Command(BaseCommand):
                     name=t.name,
                     abbrev=t.abbrev,
                     owners=t.owners,
+                    owner_ids=t.owner_ids,
                     wins=t.wins,
                     losses=t.losses,
                     ties=t.ties,
@@ -124,7 +187,7 @@ class Command(BaseCommand):
             ],
             unique_fields=["league", "espn_id"],
             update_fields=[
-                "name", "abbrev", "owners", "wins", "losses", "ties",
+                "name", "abbrev", "owners", "owner_ids", "wins", "losses", "ties",
                 "points_for", "points_against", "standing", "waiver_rank",
             ],
         )
@@ -158,9 +221,11 @@ class Command(BaseCommand):
             update_fields=["team_b", "score_a", "score_b"],
         )
 
-        PendingMove.objects.filter(league=league).delete()
+        # trades are the league's business. Claims in `data` came from one member's cookies, so _save_claims handles them.
+        PendingMove.objects.filter(league=league, owner__isnull=True).delete()
         PendingMove.objects.bulk_create(
             PendingMove(league=league, espn_id=m.espn_id, kind=m.kind, team_espn_id=m.team_id, items=m.items)
             for m in data.pending
+            if m.kind == PendingMove.TRADE
         )
         return league

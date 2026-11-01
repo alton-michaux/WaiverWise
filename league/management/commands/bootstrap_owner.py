@@ -1,6 +1,8 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
+from league import connect
 from league.models import League, Membership, active_leagues
 
 
@@ -25,6 +27,9 @@ class Command(BaseCommand):
             raise CommandError(f"team {team} is already claimed by user {other.user_id}")
         Membership.objects.update_or_create(user=user, league=chosen, defaults={"team": claimed})
         self.stdout.write(f"user {user.pk} now has team {team} in league {chosen.pk}")
+        if settings.ESPN_S2 and settings.ESPN_SWID:
+            connect._store_cookies(user, chosen, settings.ESPN_S2, settings.ESPN_SWID)
+            self.stdout.write("saved ESPN_S2 and ESPN_SWID as this user's encrypted login for the league")
 
     def _league(self, espn_id: int | None) -> League:
         leagues = active_leagues()
