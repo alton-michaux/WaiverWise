@@ -21,6 +21,12 @@ OTHER = "{BBBBBBBB-0000-0000-0000-000000000002}"
 S2 = "secret-s2-value"
 
 
+@pytest.fixture(autouse=True)
+def anyone_may_add_a_league(monkeypatch):
+    """These tests are about ESPN access. test_invites.py covers who may add a league."""
+    monkeypatch.setattr(connect, "may_add_league", lambda user: True)
+
+
 @pytest.fixture
 def espn(monkeypatch):
     state = SimpleNamespace(allowed={SWID})

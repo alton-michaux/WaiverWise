@@ -1,6 +1,8 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.urls import reverse
 
-from .models import EspnCredential, League, LeaguePlayer, Matchup, Membership, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from . import invites
+from .models import EspnCredential, Invite, League, LeaguePlayer, Matchup, Membership, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
 
 
 @admin.register(League)
@@ -33,6 +35,24 @@ class EspnCredentialAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(Invite)
+class InviteAdmin(admin.ModelAdmin):
+    """Only its hash is stored, so the link appears once, right after creating it. Delete an invite to cancel it."""
+
+    list_display = ["kind", "league", "uses", "max_uses", "expires_at", "created_at"]
+    list_filter = ["kind"]
+    fields = ["kind", "league"]
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        token = invites.prepare(obj)
+        obj.save()
+        link = request.build_absolute_uri(reverse("invite", args=[token]))
+        messages.warning(request, f"Copy this link now, it won't be shown again: {link}")
 
 
 @admin.register(Player)

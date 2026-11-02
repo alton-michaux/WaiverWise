@@ -19,7 +19,7 @@ def test_user_without_a_league_is_offered_connecting_one(client, path):
     resp = client.get(path)
     assert resp.status_code == 403  # not a 2xx, or the service worker would save it as the page
     assert b"not in a league yet" in resp.content
-    assert b"/connect/" in resp.content
+    assert b"takes an invite link" in resp.content
 
 
 def test_sync_errors_are_not_shown_to_users_without_a_league(client):

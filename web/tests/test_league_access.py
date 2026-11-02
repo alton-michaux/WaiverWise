@@ -250,7 +250,7 @@ def test_error_text_is_for_staff():
 
 def test_rejected_logins_tell_members_who_can_fix_it():
     SyncRun.objects.create(step="league", ok=False, error="ESPNAccessDenied")
-    assert "needs to reconnect" in sync_problem(timezone.now())
+    assert "connecting their ESPN login" in sync_problem(timezone.now())
 
 
 # --- membership rules

@@ -1,0 +1,37 @@
+# Weekly encrypted database backup, kept as an Actions artifact.
+# This repo is public, so anyone can download artifacts and read logs. The dump is encrypted on the way out and
+# plaintext never touches disk. pg_dump's errors can name the database host, so they aren't printed either.
+name: Back up database
+
+on:
+  schedule:
+    - cron: "0 9 * * 3"  # Wed 4:00 ET, when no sync or game is close
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Dump and encrypt
+        # a pg_dump newer than the server works, and an older one refuses
+        run: |
+          set -euo pipefail
+          if [ -z "$BACKUP_PASSPHRASE" ] || [ -z "$DATABASE_URL" ]; then
+            echo "BACKUP_PASSPHRASE and DATABASE_URL must both be set"; exit 1
+          fi
+          docker run --rm -e DATABASE_URL --network host postgres:18-alpine \
+            sh -c 'pg_dump --format=custom --no-owner --no-privileges "$DATABASE_URL"' 2>/dev/null \
+            | gpg --batch --yes --quiet --symmetric --cipher-algo AES256 \
+                --passphrase-fd 3 --output backup.dump.gpg 3<<<"$BACKUP_PASSPHRASE"
+          echo "encrypted backup: $(du -h backup.dump.gpg | cut -f1)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup
+          path: backup.dump.gpg
+          retention-days: 60
+          if-no-files-found: error

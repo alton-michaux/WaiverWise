@@ -12,7 +12,7 @@ from django.utils import timezone
 from espn_api.requests.espn_requests import ESPNAccessDenied, ESPNInvalidLeague
 
 from league import credentials, espn_client
-from league.models import EspnCredential, League, Membership, PendingMove, Team
+from league.models import EspnCredential, InviteUse, League, Membership, PendingMove, Team, active_leagues
 from league.support import check_supported
 
 
@@ -35,6 +35,7 @@ def connect_league(user, espn_id: int, espn_s2: str = "", swid: str = "") -> Lea
         raise ConnectError("Couldn't reach ESPN just now. Try again in a minute.")
     if problems := check_supported(info):
         raise ConnectError(" ".join(problems))
+    _check_room_for(user, info)
     with transaction.atomic():
         league = _store(info, is_public)
         if not is_public:
@@ -53,6 +54,20 @@ def _probe(espn_id: int, season: int, espn_s2: str, swid: str) -> tuple[espn_cli
         return espn_client.probe_league(espn_id, season, espn_s2, swid), False
     except ESPNAccessDenied:
         raise NeedsCookies("ESPN didn't accept those cookies for this league. Check that you copied both, from an account in the league.")
+
+
+def may_add_league(user) -> bool:
+    return user.has_perm("league.connect_league")
+
+
+def _check_room_for(user, info: espn_client.LeagueInfo) -> None:
+    """A new league costs every league sync time. Runs after ESPN said yes, so it can't reveal a private league."""
+    if League.objects.filter(espn_id=info.espn_id, season=info.season).exists():
+        return
+    if not may_add_league(user):
+        raise ConnectError("Adding a new league to WaiverWise takes an invite. Ask whoever invited you for one.")
+    if active_leagues().count() >= settings.MAX_LEAGUES:
+        raise ConnectError("WaiverWise is full for now, so it can't take another league.")
 
 
 def _store(info: espn_client.LeagueInfo, is_public: bool) -> League:
@@ -97,8 +112,12 @@ def _store_cookies(user, league: League, espn_s2: str, swid: str) -> None:
 
 
 def can_join(user, league: League) -> bool:
-    """A public league needs nothing. A private one needs cookies ESPN accepted from this user."""
-    return league.is_public or EspnCredential.objects.filter(user=user, league=league).exists()
+    """A public league needs nothing. A private one needs cookies ESPN accepted from this user, or an invite to it."""
+    return (
+        league.is_public
+        or EspnCredential.objects.filter(user=user, league=league).exists()
+        or InviteUse.objects.filter(user=user, invite__league=league).exists()
+    )
 
 
 def open_teams(league: League):
@@ -125,6 +144,7 @@ def disconnect(user, league: League) -> None:
 def leave_league(user, league: League) -> None:
     with transaction.atomic():
         disconnect(user, league)
+        InviteUse.objects.filter(user=user, invite__league=league).delete()  # coming back takes a new invite
         Membership.objects.filter(user=user, league=league).delete()
         delete_if_empty([league.pk])
 

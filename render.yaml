@@ -22,5 +22,9 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: MAX_LEAGUES
+        value: "10"
+      - key: EXPLAIN_DAILY_CAP
+        value: "25"
       - key: CLAUDE_MODEL
         value: claude-haiku-5-5

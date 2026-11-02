@@ -1,9 +1,17 @@
 {% extends "web/base.html" %}
-{% block title %}Connect a league · WaiverWise{% endblock %}
+{% block title %}Get started · WaiverWise{% endblock %}
 {% block content %}
 <article>
   <h2>You're not in a league yet</h2>
+  {% for league in invited_to %}
+  <p><a role="button" href="{% url 'connect_team' league.pk %}">Pick your team in {{ league.name }}</a></p>
+  {% endfor %}
+  {% if may_add %}
   <p>Connect your ESPN league to get started. It takes about a minute.</p>
   <a role="button" href="{% url 'connect' %}">Connect a league</a>
+  {% elif not invited_to %}
+  <p>Joining a league takes an invite link. Ask whoever invited you for one.</p>
+  <p class="muted">Already have ESPN cookies for a league someone has connected? <a href="{% url 'connect' %}">Use them here</a>.</p>
+  {% endif %}
 </article>
 {% endblock %}
