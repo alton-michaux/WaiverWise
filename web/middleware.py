@@ -5,6 +5,8 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 
+from league import invites
+from league.connect import may_add_league
 from league.models import Membership
 from web import services
 
@@ -52,5 +54,6 @@ class LeagueScopeMiddleware:
         if isinstance(exception, services.LeagueNotReady):
             return render(request, "web/syncing.html", status=503)
         if isinstance(exception, Membership.DoesNotExist):
-            return render(request, "web/no_data.html", status=403)
+            context = {"invited_to": invites.leagues_awaiting_a_team(request.user), "may_add": may_add_league(request.user)}
+            return render(request, "web/no_data.html", context, status=403)
         return None

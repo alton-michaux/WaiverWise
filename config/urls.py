@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from web import connect_views, views
+from web import connect_views, invite_views, views
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -20,6 +20,8 @@ urlpatterns = [
     path("account/delete/", connect_views.delete_account, name="delete_account"),
     path("account/leagues/<int:pk>/disconnect/", connect_views.disconnect, name="disconnect_league"),
     path("account/leagues/<int:pk>/leave/", connect_views.leave, name="leave_league"),
+    path("invite/<str:token>/", invite_views.invite, name="invite"),
+    path("reset/<uidb64>/<token>/", invite_views.ResetPassword.as_view(), name="password_reset_confirm"),
     path("explain/<str:kind>/", views.explain, name="explain"),
     path("login/", auth_views.LoginView.as_view(template_name="web/login.html", redirect_authenticated_user=True), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),

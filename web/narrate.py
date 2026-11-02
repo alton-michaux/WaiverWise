@@ -9,11 +9,13 @@ import json
 
 import anthropic
 from django.conf import settings
+from django.db.models import F
+from django.utils import timezone
 
 from analysis.lineup import NON_STARTING
 from analysis.matchups import NEUTRAL
 from analysis.scoring import rule_points
-from web.models import Explanation
+from web.models import ExplainUsage, Explanation
 
 MAX_TOKENS = 16000
 # models that accept server-side refusal fallback; Haiku has none, so don't send it there
@@ -65,16 +67,37 @@ def league_description(league) -> str:
     return f"a {league.team_count}-team ESPN league ({', '.join(terms)}) starting {lineup}"
 
 
-def explain(kind: str, payload: dict, league) -> str:
+def explain(kind: str, payload: dict, league, user) -> str:
     body = json.dumps(payload, sort_keys=True, default=str)
     description = league_description(league)
     key = hashlib.sha256(f"{settings.CLAUDE_MODEL}:{kind}:{description}:{body}".encode()).hexdigest()
     if cached := Explanation.objects.filter(key=key).first():
         return cached.text
 
-    text = _ask_claude(kind, body, description)
+    _take_one_from_allowance(user)
+    try:
+        text = _ask_claude(kind, body, description)
+    except Exception as e:
+        _give_one_back(user)
+        # how to fix the key or the bill is for whoever runs this, not for the person reading their lineup
+        if isinstance(e, NarrationError) and not user.is_staff:
+            raise NarrationError("Explanations aren't available right now.") from e
+        raise
     Explanation.objects.update_or_create(key=key, defaults={"kind": kind, "text": text})
     return text
+
+
+def _take_one_from_allowance(user) -> None:
+    """Counted before asking Claude, so several requests at once can't all slip under the cap."""
+    today = timezone.localdate()
+    ExplainUsage.objects.get_or_create(user=user, day=today)
+    allowed = ExplainUsage.objects.filter(user=user, day=today, count__lt=settings.EXPLAIN_DAILY_CAP)
+    if not allowed.update(count=F("count") + 1):
+        raise NarrationError(f"That's today's {settings.EXPLAIN_DAILY_CAP} new explanations. More open up tomorrow.")
+
+
+def _give_one_back(user) -> None:
+    ExplainUsage.objects.filter(user=user, day=timezone.localdate(), count__gt=0).update(count=F("count") - 1)
 
 
 def _ask_claude(kind: str, body: str, description: str) -> str:

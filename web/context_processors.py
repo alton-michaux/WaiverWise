@@ -61,7 +61,7 @@ def sync_problem(last_synced, league=None, staff=False) -> str:
     latest = SyncRun.objects.filter(Q(league=league) | Q(league__isnull=True), step="league").first()
     if latest and not latest.ok:
         if "ESPNAccessDenied" in latest.error:
-            return "ESPN rejected every saved login for this league, so its data isn't updating. A member who connected it needs to reconnect."
+            return "ESPN rejected every saved login for this league, so its data isn't updating. Any member can fix this by connecting their ESPN login under Connect a league."
         detail = f" ({latest.error[:120]})" if staff else ""
         return f"The last league sync failed{detail}. Data may be out of date."
     if last_synced and timezone.now() - last_synced > STALE_AFTER:

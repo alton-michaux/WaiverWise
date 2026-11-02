@@ -11,6 +11,7 @@ dependencies = [
     "apscheduler>=3.10,<4",
     "cryptography>=50.0.2",
     "django>=6.1.2",
+    "django-axes>=8",
     "django-environ>=0.14.0",
     "espn-api>=1.0.1",
     "gunicorn>=26.2.0",
@@ -29,6 +30,8 @@ dev = [
 
 [tool.uv]
 package = false
+# espn-api pins idna below what the patched httpx2 needs; only requests uses it there, not espn-api itself
+override-dependencies = ["idna>=3.18"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"

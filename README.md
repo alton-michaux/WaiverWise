@@ -2,7 +2,7 @@
 
 Start/sit, waiver, and trade analysis for ESPN fantasy football leagues.
 
-Sign in, connect your ESPN league, and pick your team. Public leagues need nothing else. Private leagues need one member's `espn_s2` and `SWID` cookies, saved encrypted. Every member with cookies gets their own waiver claims, which nobody else sees.
+WaiverWise is invite-only. Follow your invite link, connect your ESPN league or join one, and pick your team. Public leagues need nothing else. Private leagues need one member's `espn_s2` and `SWID` cookies, saved encrypted. Every member with cookies gets their own waiver claims, which nobody else sees.
 
 Supports head-to-head points leagues with QB, RB, WR, TE, FLEX (`RB/WR`, `WR/TE`, `RB/WR/TE`), superflex (`OP`), D/ST and K slots. Category, roto and IDP leagues are refused at sync. Scoring rules Sleeper can't price, like 40+ yard TD or 300-yard bonuses, count only through the ESPN half of the projection consensus.
 
@@ -21,13 +21,26 @@ App: http://localhost:8000. Sign in and use **Connect a league**. Without `GITHU
 
 A user only sees leagues they have a membership in. Admin → Memberships fixes a wrong team claim.
 
+## Inviting people
+
+Staff make invites in Admin → Invites. The link appears once, right after saving, because only its hash is stored. Both kinds last 14 days, and deleting one cancels it.
+
+- **App invite:** one use, for someone connecting their own league. Only this kind, or a superuser, can add a new league.
+- **League invite:** usable once per team in the league, for leaguemates. It opens that league even when it's private, so they don't need cookies. Their waiver claims won't show unless they also save their own.
+
+`MAX_LEAGUES` (default 10) caps leagues this season, because syncs run one league at a time.
+
+**Lost passwords:** there's no email. In Admin → Users, select the user and run **Make a password reset link**, then send them the link. It's made in the admin because it's signed with the server's `SECRET_KEY`.
+
+**Locked out:** five wrong passwords pause that username for 15 minutes. Admin → Access attempts clears it sooner. The pause goes by username because every request reaches the app through Render's proxy, which means anyone who knows a username can trigger it.
+
 `bootstrap_owner <username> <team id>` attaches an existing account to a team already in the database. With `ESPN_S2` and `ESPN_SWID` set, it also saves them as that account's encrypted login, which is how a league from before the connect flow gets its cookies.
 
 After changing dependencies, rebuild with fresh venv volumes or the containers keep the old one: `docker compose up -d --build --renew-anon-volumes`.
 
 ## Explanations
 
-Each page has an "Explain this" button that sends the numbers the page already computed to Claude for a short plain-English write-up, at low effort. It needs `ANTHROPIC_API_KEY` in `.env`. The model is `CLAUDE_MODEL`, default `claude-haiku-5-5` (the cheapest, about $0.0003 per click); set `claude-sonnet-5-5` or `claude-opus-5-5` for richer write-ups. Opus and Sonnet requests also turn on server-side refusal fallback, which Haiku doesn't support. Explanations are cached by their input, so re-clicking on unchanged data doesn't make another API call.
+Each page has an "Explain this" button that sends the numbers the page already computed to Claude for a short plain-English write-up, at low effort. It needs `ANTHROPIC_API_KEY` in `.env`. The model is `CLAUDE_MODEL`, default `claude-haiku-5-5` (the cheapest, about $0.0003 per click); set `claude-sonnet-5-5` or `claude-opus-5-5` for richer write-ups. Opus and Sonnet requests also turn on server-side refusal fallback, which Haiku doesn't support. Explanations are cached by their input, so re-clicking on unchanged data doesn't make another API call. `EXPLAIN_DAILY_CAP` (default 25) limits how many new explanations each user can get per day, and cached ones don't count.
 
 ## Syncing
 
@@ -81,11 +94,25 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 | `DATABASE_URL` | the database's **External** URL with `?sslmode=require` on the end |
 | `SECRET_KEY` | any random string (`python3 -c 'import secrets; print(secrets.token_urlsafe(50))'`) |
 | `CREDENTIAL_KEY` | same value as on Render |
+| `BACKUP_PASSPHRASE` | a long random phrase that encrypts backups; only the backup workflow uses it |
 | `ESPN_SEASON` | optional, the season new leagues connect to (default in `config/settings.py`) |
 
 Syncs then run on their own. A failed sync fails the workflow and GitHub emails you. Expired ESPN cookies don't count as a failure: the app asks that member to reconnect. A league nobody has opened in 14 days stops syncing until someone does. Logs on this public repo carry only ids and counts.
 
 GitHub cron uses UTC and can run a few minutes late when GitHub is busy.
+
+### 3. Weekly backups
+
+`.github/workflows/backup.yml` dumps the database every Wednesday and keeps it 60 days as an Actions artifact. This repo is public, so anyone can download that artifact: it's encrypted with `BACKUP_PASSPHRASE` before it leaves the runner. Add that secret, and keep a copy of it and `CREDENTIAL_KEY` outside GitHub, since neither can be recovered.
+
+To restore into an empty database:
+
+```bash
+gh run download <run id> -n backup
+gpg --decrypt backup.dump.gpg | pg_restore --no-owner -d "$DATABASE_URL"
+```
+
+Use `pg_restore` 18, the version that made the dump. Restoring into an older server reports an error about `transaction_timeout`, which is harmless.
 
 ### Free-tier tradeoffs
 

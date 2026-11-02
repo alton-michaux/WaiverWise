@@ -10,10 +10,12 @@ from django.utils import timezone
 from espn_api.requests.espn_requests import ESPNAccessDenied
 
 from league.models import League, SyncRun, leagues_in_use
+from web.models import ExplainUsage, Explanation
 
 log = logging.getLogger(__name__)
 
 KEEP_RUNS = 200
+KEEP_EXPLANATIONS = timedelta(days=30)
 # arbitrary keys for pg_try_advisory_lock: one sync at a time for the shared steps and for each league
 SYNC_LOCK_KEY = 7_220_001
 LEAGUE_LOCK_KEY = 7_220_002
@@ -42,6 +44,7 @@ class Command(BaseCommand):
     def handle(self, *args, only=None, league=None, **opts):
         failed = self._run_one(league) if league else self._run_all(only)
         self._prune_runs()
+        self._prune_explanations()
         if failed:
             raise CommandError(f"failed steps: {', '.join(failed)}")
 
@@ -170,3 +173,8 @@ class Command(BaseCommand):
         for league_id in SyncRun.objects.order_by().values_list("league_id", flat=True).distinct():
             stale = SyncRun.objects.filter(league_id=league_id).values_list("pk", flat=True)[KEEP_RUNS:]
             SyncRun.objects.filter(pk__in=list(stale)).delete()
+
+    def _prune_explanations(self):
+        """Old write-ups describe numbers that have changed, so they'd never be asked for again."""
+        Explanation.objects.filter(created_at__lt=timezone.now() - KEEP_EXPLANATIONS).delete()
+        ExplainUsage.objects.filter(day__lt=timezone.localdate() - timedelta(days=1)).delete()

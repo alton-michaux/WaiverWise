@@ -26,6 +26,7 @@ class League(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["espn_id", "season"], name="uniq_league_season")]
+        permissions = [("connect_league", "Can add a new league to WaiverWise")]
 
     def __str__(self):
         return f"{self.name} ({self.season})"
@@ -106,6 +107,52 @@ class EspnCredential(models.Model):
     def mark_expired(self):
         self.status = self.EXPIRED
         self.save(update_fields=["status"])
+
+
+class Invite(models.Model):
+    """A link that lets someone in. Only its hash is stored, so a copy of the database can't hand out working links."""
+
+    APP, LEAGUE = "app", "league"
+
+    token_hash = models.CharField(max_length=64, unique=True, editable=False)
+    kind = models.CharField(
+        max_length=10,
+        choices=[(APP, "App: one person connects their own league"), (LEAGUE, "League: leaguemates join this league")],
+    )
+    league = models.ForeignKey(League, on_delete=models.CASCADE, null=True, blank=True, related_name="invites")
+    expires_at = models.DateTimeField(editable=False)
+    uses = models.PositiveSmallIntegerField(default=0, editable=False)
+    max_uses = models.PositiveSmallIntegerField(editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(kind="league", league__isnull=False) | models.Q(kind="app", league__isnull=True),
+                name="invite_league_matches_kind",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.get_kind_display()}, {self.uses}/{self.max_uses} used"
+
+    def clean(self):
+        if self.kind == self.LEAGUE and self.league_id is None:
+            raise ValidationError({"league": "A league invite needs a league."})
+        if self.kind == self.APP and self.league_id is not None:
+            raise ValidationError({"league": "An app invite isn't for one league. Leave this empty."})
+
+
+class InviteUse(models.Model):
+    """Who used an invite. For a league invite, this is what opens a private league to them."""
+
+    invite = models.ForeignKey(Invite, on_delete=models.CASCADE, related_name="redemptions")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="invite_uses")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["invite", "user"], name="uniq_invite_use")]
 
 
 class Player(models.Model):

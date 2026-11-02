@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -8,6 +9,17 @@ class Explanation(models.Model):
     kind = models.CharField(max_length=20)
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ExplainUsage(models.Model):
+    """How many explanations Claude wrote for one user on one day. Cached ones are free and don't count."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+")
+    day = models.DateField()
+    count = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "day"], name="uniq_explain_usage")]
 
 
 class TradeDeals(models.Model):

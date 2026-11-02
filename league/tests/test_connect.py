@@ -21,6 +21,12 @@ SWID = "{AAAAAAAA-0000-0000-0000-000000000001}"
 OTHER_SWID = "{BBBBBBBB-0000-0000-0000-000000000002}"
 
 
+@pytest.fixture(autouse=True)
+def anyone_may_add_a_league(monkeypatch):
+    """These tests are about ESPN access. test_invites.py covers who may add a league."""
+    monkeypatch.setattr(connect, "may_add_league", lambda user: True)
+
+
 def info(**fields):
     return LeagueInfo(**{**dict(
         espn_id=77, season=2026, name="Stored League", team_count=2, current_week=8, reg_season_weeks=14, final_week=17,

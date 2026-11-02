@@ -1,0 +1,31 @@
+{% extends "web/base.html" %}
+{% block title %}You're invited · WaiverWise{% endblock %}
+{% block content %}
+<article class="login">
+  <h2>{% if invite.league %}Join {{ invite.league.name }}{% else %}You're invited to WaiverWise{% endif %}</h2>
+  {% if user.is_authenticated %}
+  <p>You're signed in as {{ user.username }}.</p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit">{% if invite.league %}Join this league{% else %}Accept and connect a league{% endif %}</button>
+  </form>
+  {% else %}
+  <p class="muted">Pick a username and password. There's no email on file, so if you lose your password, ask whoever invited you for a reset link.</p>
+  <form method="post" autocomplete="off">
+    {% csrf_token %}
+    {% for field in form %}
+    <label>{{ field.label }}
+      <input type="{% if 'password' in field.name %}password{% else %}text{% endif %}" name="{{ field.html_name }}" {% if field.name == "username" %}value="{{ field.value|default:'' }}" autocomplete="username" autocapitalize="none" autofocus{% else %}autocomplete="new-password"{% endif %} required>
+      {% for error in field.errors %}<small class="move-out" role="alert">{{ error }}</small>{% endfor %}
+    </label>
+    {% endfor %}
+    <p class="muted"><small>Passwords need at least 8 characters, and can't be common, all numbers, or close to your username.</small></p>
+    <button type="submit">Create my account</button>
+  </form>
+  <script>
+    // a new person on this device: have the service worker forget anything the last one left behind
+    navigator.serviceWorker?.ready.then((reg) => reg.active?.postMessage("clear-pages"));
+  </script>
+  {% endif %}
+</article>
+{% endblock %}
