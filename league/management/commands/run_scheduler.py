@@ -44,6 +44,13 @@ def wait_for_migrations():
         time.sleep(MIGRATION_POLL_SECONDS)
 
 
+def send_notifications():
+    try:
+        call_command("send_notifications")
+    except Exception:
+        log.exception("sending notifications failed")
+
+
 def run(steps: list[str]):
     try:
         call_command("sync_all", only=steps)
@@ -68,6 +75,9 @@ class Command(BaseCommand):
                 max_instances=1,
                 misfire_grace_time=15 * 60,
             )
+
+        # what the overnight sync found, once quiet hours end
+        scheduler.add_job(send_notifications, CronTrigger(hour=8, minute=0), id="morning_notifications", coalesce=True, misfire_grace_time=15 * 60)
 
         last = League.objects.order_by("-synced_at").values_list("synced_at", flat=True).first()
         if last is None or timezone.now() - last > STALE_AFTER:

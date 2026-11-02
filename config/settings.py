@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "league",
     "nfl",
     "web",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -60,6 +61,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "web.context_processors.sync_status",
                 "web.context_processors.team_picker",
+                "web.context_processors.push",
             ],
         },
     },
@@ -123,6 +125,11 @@ ESPN_SEASON = env.int("ESPN_SEASON", default=2026)
 ESPN_S2 = env("ESPN_S2", default=None)
 ESPN_SWID = env("ESPN_SWID", default=None)
 ESPN_MY_TEAM_ID = env.int("ESPN_MY_TEAM_ID", default=None)
+
+# push notifications (optional): manage.py generate_vapid_keys. All three, or notifications stay off.
+VAPID_PUBLIC_KEY = env("VAPID_PUBLIC_KEY", default=None)
+VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY", default=None)
+VAPID_SUBJECT = env("VAPID_SUBJECT", default=None)  # mailto: or https: address push services can reach you at
 
 # Claude explanations (optional)
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default=None)

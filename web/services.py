@@ -190,11 +190,17 @@ def win_summary(rec: Recommendation) -> dict | None:
     }
 
 
-def move_count(team: Team) -> int:
-    """How many moves the default mode recommends. Skips the simulation, so it's cheap enough for any page."""
+def suggested_moves(team: Team) -> tuple[list[tuple[PlayerRow, PlayerRow | None]], float]:
+    """The default mode's moves and the projected points they add. Skips the simulation, so it's cheap enough for any page."""
     league = team.league
-    spots, _ = roster_spots(team, league.current_week)
-    return len(recommend(spots, league.lineup_slots).moves)
+    spots, rows = roster_spots(team, league.current_week)
+    rec = recommend(spots, league.lineup_slots)
+    moves = [(rows[i], rows[o] if o is not None else None) for i, o in rec.moves]
+    return moves, rec.best_points - rec.current_points
+
+
+def move_count(team: Team) -> int:
+    return len(suggested_moves(team)[0])
 
 
 TREND_POSITIONS = {"QB", "RB", "WR", "TE"}

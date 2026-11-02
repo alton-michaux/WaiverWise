@@ -33,6 +33,9 @@ jobs:
       ESPN_SEASON: ${{ secrets.ESPN_SEASON }}
       ESPN_S2: ${{ secrets.ESPN_S2 }}
       ESPN_SWID: ${{ secrets.ESPN_SWID }}
+      VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
       ESPN_MY_TEAM_ID: ${{ secrets.ESPN_MY_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4

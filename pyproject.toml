@@ -17,6 +17,7 @@ dependencies = [
     "nflreadpy>=0.1.5",
     "numpy>=2.5.4",
     "psycopg[binary]>=3.3.6",
+    "pywebpush>=2.5.0",
     "whitenoise>=6.12.0",
 ]
 
