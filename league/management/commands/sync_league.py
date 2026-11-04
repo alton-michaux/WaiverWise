@@ -142,7 +142,14 @@ class Command(BaseCommand):
 
         PendingMove.objects.filter(league=league).delete()
         PendingMove.objects.bulk_create(
-            PendingMove(league=league, espn_id=m.espn_id, kind=m.kind, team_espn_id=m.team_id, items=m.items)
+            PendingMove(
+                league=league,
+                espn_id=m.espn_id,
+                kind=m.kind,
+                team_espn_id=m.team_id,
+                items=m.items,
+                accepted_at=m.accepted_at,
+            )
             for m in data.pending
         )
         return league

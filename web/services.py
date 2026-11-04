@@ -2,11 +2,12 @@
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import cache
 
 from django.conf import settings
 from django.db.models import Q
+from django.utils import timezone
 
 from analysis.lineup import NON_STARTING
 from analysis.consistency import Consistency, consistency
@@ -67,12 +68,21 @@ def remembered_team(request, league: League) -> Team | None:
     return league.teams.filter(espn_id=team_id).first() if team_id.isdigit() else None
 
 
+TRADE_LABEL_DAYS = 2
+
+
 def tied_up(league: League) -> dict[int, str]:
-    """Player pk -> label for players in an accepted trade or pending waiver claim."""
+    """Player pk -> label for players in an accepted trade or pending waiver claim.
+
+    Trade labels drop off TRADE_LABEL_DAYS after acceptance, since ESPN can leave a
+    processed trade looking pending.
+    """
     teams = dict(league.teams.values_list("espn_id", "name"))
     players = dict(Player.objects.values_list("espn_id", "pk"))
+    stale = timezone.now() - timedelta(days=TRADE_LABEL_DAYS)
     labels = {}
-    for move in PendingMove.objects.filter(league=league):
+    moves = PendingMove.objects.filter(league=league).exclude(kind=PendingMove.TRADE, accepted_at__lt=stale)
+    for move in moves:
         for item in move.items:
             pk = players.get(item["player_id"])
             if pk is None:
