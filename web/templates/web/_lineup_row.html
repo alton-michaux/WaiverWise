@@ -3,13 +3,14 @@
   <div class="row-slot">{{ row.slot|slot_label }}</div>
   <div class="row-main">
     <div class="row-name">
-      {{ row.player.name }}
+      {% include "web/_player_link.html" with pk=row.player.pk name=row.player.name %}
       {% if row.slot in non_starting and best not in non_starting %}<span class="tag tag-in">Start</span>{% elif row.slot not in non_starting and best in non_starting %}<span class="tag tag-out">Bench</span>{% endif %}
       {% if row.player.injury_status and row.player.injury_status != "ACTIVE" %}<span class="tag tag-warn">{{ row.player.injury_status|status_label }}</span>{% endif %}
       {% if row.locked %}<span class="tag">Locked</span>{% endif %}
       {% if row.pending %}<span class="tag">{{ row.pending }}</span>{% endif %}
+      {% if not row.locked %}{% if row.matchup.grade == "Good" %}<span class="tag tag-in">Good matchup</span>{% elif row.matchup.grade == "Tough" %}<span class="tag tag-out">Tough matchup</span>{% endif %}{% endif %}
     </div>
-    <div class="muted row-meta">{{ row.player.position }} · {{ row.player.pro_team }}{% if row.opponent != "BYE" %} vs {{ row.opponent }}{% endif %}</div>
+    <div class="muted row-meta">{{ row.player.position }} · {{ row.player.pro_team }}{% if row.opponent != "BYE" %} {% if row.line.is_home is False %}@{% else %}vs{% endif %} {{ row.opponent }}{% endif %}</div>
   </div>
   <div class="row-points">
     {% if row.projection %}{{ row.projection.mean|pts }}{% else %}<span class="muted row-meta">bye</span>{% endif %}

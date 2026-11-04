@@ -21,7 +21,14 @@ def data_version(league) -> str:
 
 def _players(ctx: TradeContext, ids: list[int]) -> list[dict]:
     return [
-        {"id": r.player.pk, "name": r.player.name, "position": r.player.position, "ros": r.ros_points}
+        {
+            "id": r.player.pk,
+            "name": r.player.name,
+            "position": r.player.position,
+            "ros": r.ros_points,
+            "ros_schedule": r.ros_schedule.grade if r.ros_schedule else "",
+            "playoff_schedule": r.playoff_schedule.grade if r.playoff_schedule else "",
+        }
         for r in trade_rows(ctx, ids)
     ]
 

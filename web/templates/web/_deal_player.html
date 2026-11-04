@@ -1,0 +1,7 @@
+<li>
+  <span class="swap-label {{ side_class }}">{{ side }}</span>
+  <span>
+    {% include "web/_player_link.html" with link_class="link-button" %}
+    {% if ros or playoffs %}<small class="muted">{% if ros %}Schedule: {{ ros }}{% endif %}{% if ros and playoffs %} · {% endif %}{% if playoffs %}Playoffs: {{ playoffs }}{% endif %}</small>{% endif %}
+  </span>
+</li>

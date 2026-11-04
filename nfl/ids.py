@@ -8,8 +8,15 @@ from league.models import Player
 ESPN_TO_SLEEPER_TEAM = {"WSH": "WAS"}
 
 
+NFLVERSE_TO_ESPN_TEAM = {"LA": "LAR", "WAS": "WSH"}
+
+
 def sleeper_team(espn_team: str) -> str:
     return ESPN_TO_SLEEPER_TEAM.get(espn_team, espn_team)
+
+
+def espn_team(nflverse_team: str) -> str:
+    return NFLVERSE_TO_ESPN_TEAM.get(nflverse_team, nflverse_team)
 
 
 def update_crosswalk() -> int:

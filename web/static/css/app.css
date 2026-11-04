@@ -286,6 +286,27 @@ button.deal + button.deal { border-top: 1px solid var(--pico-muted-border-color)
 .deal-them { margin-left: .25rem; font: 600 1.05rem/1 var(--font-display); font-variant-numeric: tabular-nums; color: var(--ink); }
 .sheet .stats { margin-bottom: .75rem; }
 .sheet article p { margin-bottom: .5rem; font-size: .92rem; }
+.player-link { width: auto; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font: inherit; text-align: left; }
+.player-link:is(:hover, :active, :focus) { border: 0; background: none; box-shadow: none; color: inherit; text-decoration: underline; }
+/* the whole name area opens the sheet: a name alone is a small target on a phone */
+.row-main { position: relative; }
+.row-main .player-link::after { content: ""; position: absolute; inset: -.45rem 0; }
+.waiver-more { margin: 0; padding: 0 var(--pico-spacing) .25rem; }
+.deal-players { margin: 0 0 .5rem; padding: 0; list-style: none; }
+.deal-players li { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); align-items: center; margin: 0; padding: .25rem 0; list-style: none; }
+.deal-players .link-button { display: block; min-height: 32px; text-align: left; }
+.deal-players small { display: block; font-size: .75rem; }
+
+.player-sheet h3 { margin-bottom: .1rem; }
+.player-sheet h4 { display: flex; align-items: center; gap: .4rem; margin: 1rem 0 .4rem; font: 600 .8rem var(--font-display); letter-spacing: .07em; text-transform: uppercase; color: var(--pico-muted-color); }
+.player-sheet .waiver-detail { padding: 0; }
+.player-sheet h4 .tag { letter-spacing: 0; text-transform: none; }
+.strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr)); gap: .25rem; }
+.strip div { display: flex; flex-direction: column; align-items: center; padding: .25rem .1rem; border-radius: .25rem; background: var(--pico-muted-border-color); font-size: .78rem; font-weight: 600; line-height: 1.25; }
+.strip small { color: var(--pico-muted-color); font-size: .66rem; font-weight: 400; }
+.strip .grade-Good { background: var(--gain-tint); color: var(--pico-ins-color); }
+.strip .grade-Tough { background: var(--loss-tint); color: var(--pico-del-color); }
+.strip .grade-Good small, .strip .grade-Tough small { color: inherit; }
 .sheet-action { display: flex; align-items: center; min-height: 44px; font-size: .88rem; font-weight: 600; text-decoration: none; }
 .verdict { margin-bottom: 1rem; }
 
