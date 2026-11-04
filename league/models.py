@@ -131,6 +131,7 @@ class PendingMove(models.Model):
     team_espn_id = models.PositiveSmallIntegerField()
     # [{"player_id", "from_team", "to_team", "type"}] with ESPN ids; team 0 = free agency
     items = models.JSONField(default=list)
+    accepted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["league", "espn_id"], name="uniq_pending_move")]

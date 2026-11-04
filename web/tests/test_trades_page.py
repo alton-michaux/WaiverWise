@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.utils import timezone
 
 from analysis.projections import Projection
-from league.models import League, Player, RosterEntry, SyncRun, Team
+from league.models import League, PendingMove, Player, RosterEntry, SyncRun, Team
 from web import deals, services
 from web.models import TradeDeals
 
@@ -192,3 +195,17 @@ def test_failed_deal_search_does_not_fail_the_sync(mine, partner, monkeypatch):
 def test_refresh_skips_quietly_without_a_team(db, settings):
     settings.ESPN_MY_TEAM_ID = None
     call_command("refresh_best_deals")
+
+
+def test_trade_labels_drop_off_two_days_after_acceptance(league, mine, partner):
+    def trade(espn_id, player_id, days_ago):
+        PendingMove.objects.create(
+            league=league, espn_id=espn_id, kind=PendingMove.TRADE, team_espn_id=1,
+            items=[{"player_id": player_id, "from_team": 1, "to_team": 2, "type": "TRADE"}],
+            accepted_at=timezone.now() - timedelta(days=days_ago),
+        )
+
+    trade("fresh", 1, 1)
+    trade("stale", 2, 3)
+    labels = services.tied_up(league)
+    assert labels == {Player.objects.get(espn_id=1).pk: "Accepted trade → Partner"}

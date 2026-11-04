@@ -62,6 +62,7 @@ class PendingMoveData:
     team_id: int  # team that initiated it
     # [{"player_id", "from_team", "to_team", "type"}]; team 0 = free agency
     items: list[dict]
+    accepted_at: datetime | None = None  # trades only: when the other side accepted
 
 
 @dataclass
@@ -208,19 +209,21 @@ def _pending_moves(league: EspnLeague) -> list[PendingMoveData]:
     related = {}
     for t in txns.values():
         if t.get("relatedTransactionId"):
-            related.setdefault(t["relatedTransactionId"], set()).add((t.get("type"), t.get("status")))
+            related.setdefault(t["relatedTransactionId"], []).append(t)
 
     moves = []
     for t in txns.values():
         if t.get("status") != "PENDING":
             continue
-        links = related.get(t["id"], set())
+        links = related.get(t["id"], [])
+        accepted_at = None
         if t.get("type") == "TRADE_PROPOSAL":
-            accepted = any(kind == "TRADE_ACCEPT" for kind, _ in links)
-            dead = any(kind in DEAD_TRADE_TYPES or status == "CANCELED" for kind, status in links)
-            if not accepted or dead:
+            accepts = [r for r in links if r.get("type") == "TRADE_ACCEPT"]
+            dead = any(r.get("type") in DEAD_TRADE_TYPES or r.get("status") == "CANCELED" for r in links)
+            if not accepts or dead:
                 continue
             kind = "trade"
+            accepted_at = _from_ms(accepts[0].get("proposedDate") or accepts[0].get("processDate"))
         elif t.get("type") == "WAIVER":
             if links:  # processed claims keep PENDING; the outcome is a linked transaction
                 continue
@@ -236,6 +239,7 @@ def _pending_moves(league: EspnLeague) -> list[PendingMoveData]:
                     {"player_id": i["playerId"], "from_team": i["fromTeamId"], "to_team": i["toTeamId"], "type": i["type"]}
                     for i in t.get("items", [])
                 ],
+                accepted_at=accepted_at,
             )
         )
     return moves
