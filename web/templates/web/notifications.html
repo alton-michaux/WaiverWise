@@ -1,0 +1,23 @@
+{% extends "web/base.html" %}
+{% block title %}Notifications · WaiverWise{% endblock %}
+{% block content %}
+<article id="push-panel">
+  <h2>Notifications</h2>
+  <p data-push-status role="status" class="muted">Checking this device…</p>
+  <p>
+    <button type="button" data-push-on hidden>Turn on for this device</button>
+    <button type="button" class="secondary outline" data-push-test hidden>Send a test</button>
+    <button type="button" class="secondary outline" data-push-off hidden>Turn off for this device</button>
+  </p>
+  <p class="muted"><small>Signing out turns them off on that device. Nothing is sent from 10 PM to 8 AM Eastern.</small></p>
+  <form method="post">{% csrf_token %}
+    <fieldset>
+      <legend>On all your devices, tell me about</legend>
+      <label><input type="checkbox" name="injuries" {% if notify.injuries %}checked{% endif %}> A starter ruled out, doubtful, on IR or suspended</label>
+      <label><input type="checkbox" name="waivers" {% if notify.waivers %}checked{% endif %}> Waiver results</label>
+      <label><input type="checkbox" name="lineup" {% if notify.lineup %}checked{% endif %}> A lineup move worth making, about an hour before kickoff</label>
+    </fieldset>
+    <button type="submit" class="secondary">Save</button>
+  </form>
+</article>
+{% endblock %}

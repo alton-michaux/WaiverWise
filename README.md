@@ -80,6 +80,20 @@ Then **Actions → Sync league data → Run workflow** to do the first sync by h
 
 GitHub cron uses UTC and can run a few minutes late when GitHub is busy.
 
+### Push notifications (optional)
+
+Run `uv run python manage.py generate_vapid_keys` once, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (`mailto:` plus an address push services can reach you at) on Render and as Actions secrets. Keep the pair: a new one cuts off every device already subscribed.
+
+Then open **Notifications** from the team menu on each device and turn them on. iPhones need the app added to the Home Screen first (iOS 16.4 or later).
+
+Syncs send them, so timing follows the sync schedule:
+
+- **Starter injuries:** a starter goes out, doubtful, on IR or suspended before their game. Questionable doesn't count.
+- **Waiver results:** after the nightly sync. Claims whose player nobody rostered stay silent, since that can't be told apart from a cancelled claim.
+- **Lineup reminders:** about an hour before the first game a suggested move affects, only if it adds a point or more. Games outside the sync schedule (Saturdays, 9:30 AM Sundays) get no reminder.
+
+Nothing goes out from 10 PM to 8 AM Eastern. `.github/workflows/notify.yml` sends what that held back.
+
 ### Free-tier tradeoffs
 
 - **Cold starts:** the free web service sleeps after 15 minutes without traffic, and waking takes about a minute. The installed app shows your last-seen copy of a page after 4 seconds while the server wakes.

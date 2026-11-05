@@ -5,7 +5,8 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
-from league.models import SyncRun
+from league.models import League, SyncRun
+from notifications import delivery, events
 
 log = logging.getLogger(__name__)
 
@@ -72,7 +73,17 @@ class Command(BaseCommand):
         except Exception:
             # the Trades tab searches on demand when this is missing, so it isn't worth failing the sync
             log.exception("refreshing best deals failed")
+        self._notify()
         stale = SyncRun.objects.values_list("pk", flat=True)[KEEP_RUNS:]
         SyncRun.objects.filter(pk__in=list(stale)).delete()
         if failed:
             raise CommandError(f"failed steps: {', '.join(failed)}")
+
+    def _notify(self):
+        try:
+            league = League.objects.order_by("-season").first()
+            new = events.check_league(league) if league else 0
+            self.stdout.write(f"notifications: {new} new, {delivery.deliver()} sent")
+        except Exception as e:
+            # the data is what matters; anything unsent goes out with the next sync
+            log.error("notifications failed: %s", type(e).__name__)

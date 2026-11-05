@@ -1,4 +1,4 @@
-{% load static %}// WaiverWise service worker: offline-readable pages, cached static assets.
+{% load static %}// WaiverWise service worker: offline-readable pages, cached static assets, push notifications.
 const VERSION = "{{ version }}";
 const CACHE = `waiverwise-${VERSION}`;
 const OFFLINE_URL = "{% url 'offline' %}";
@@ -49,6 +49,31 @@ self.addEventListener("message", (event) => {
       }))
     );
   }
+});
+
+self.addEventListener("push", (event) => {
+  const { title, body, url, tag } = event.data.json();
+  event.waitUntil(self.registration.showNotification(title, {
+    body, tag, data: { url }, icon: "{% static 'icons/icon-192.png' %}",
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  event.waitUntil((async () => {
+    const [open] = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    if (open) {
+      await open.focus();
+      return open.navigate(target).catch(() => self.clients.openWindow(target));  // a window this worker doesn't control refuses
+    }
+    return self.clients.openWindow(target);
+  })());
+});
+
+// the browser replaced the subscription: get a new one, which the next page load reports to the server
+self.addEventListener("pushsubscriptionchange", (event) => {
+  if (event.oldSubscription) event.waitUntil(self.registration.pushManager.subscribe(event.oldSubscription.options));
 });
 
 self.addEventListener("fetch", (event) => {
