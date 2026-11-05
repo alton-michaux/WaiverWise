@@ -18,6 +18,12 @@ services:
         sync: false
       - key: ESPN_MY_TEAM_ID  # which team is "yours" in the app
         sync: false
+      - key: VAPID_PUBLIC_KEY  # these three: same values as the Actions secrets
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: CLAUDE_MODEL

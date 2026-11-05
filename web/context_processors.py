@@ -11,6 +11,10 @@ from web.services import remembered_team
 STALE_AFTER = timedelta(hours=12)
 
 
+def push(request):
+    return {"push_key": settings.VAPID_PUBLIC_KEY}
+
+
 def sync_status(request):
     if not request.user.is_authenticated:
         return {}

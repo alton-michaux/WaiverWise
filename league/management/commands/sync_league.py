@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -5,6 +7,9 @@ from django.db import transaction
 from league import espn_client
 from league.bulk import upsert
 from league.models import League, Matchup, PendingMove, Player, PlayerWeek, ProGame, RosterEntry, Team
+from notifications import events
+
+log = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -16,8 +21,18 @@ class Command(BaseCommand):
         data = espn_client.fetch_league(
             settings.ESPN_LEAGUE_ID, settings.ESPN_SEASON, settings.ESPN_S2, settings.ESPN_SWID
         )
+        still_pending = {m.espn_id for m in data.pending}
+        gone = [
+            m for m in PendingMove.objects.filter(league__espn_id=data.espn_id, league__season=data.season, kind=PendingMove.WAIVER)
+            if m.espn_id not in still_pending
+        ]
         with transaction.atomic():
             league = self._save(data)
+        try:
+            events.waiver_results(league, gone)
+        except Exception as e:
+            # the sync's job is done, and only this one message is lost
+            log.warning("waiver results failed: %s", type(e).__name__)
         self.stdout.write(
             self.style.SUCCESS(
                 f"Synced {league}: week {league.current_week}, {len(data.teams)} teams, "
@@ -142,7 +157,14 @@ class Command(BaseCommand):
 
         PendingMove.objects.filter(league=league).delete()
         PendingMove.objects.bulk_create(
-            PendingMove(league=league, espn_id=m.espn_id, kind=m.kind, team_espn_id=m.team_id, items=m.items)
+            PendingMove(
+                league=league,
+                espn_id=m.espn_id,
+                kind=m.kind,
+                team_espn_id=m.team_id,
+                items=m.items,
+                accepted_at=m.accepted_at,
+            )
             for m in data.pending
         )
         return league

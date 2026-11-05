@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path
 
-from web import views
+from web import notification_views, views
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -11,6 +11,11 @@ urlpatterns = [
     path("waivers/", views.waivers, name="waivers"),
     path("trades/", views.trades, name="trades"),
     path("trades/best/", views.best_deals, name="best_deals"),
+    path("player/<int:pk>/", views.player_sheet, name="player_sheet"),
+    path("notifications/", notification_views.page, name="notifications"),
+    path("notifications/subscribe/", notification_views.subscribe, name="push_subscribe"),
+    path("notifications/unsubscribe/", notification_views.unsubscribe, name="push_unsubscribe"),
+    path("notifications/test/", notification_views.test, name="push_test"),
     path("explain/<str:kind>/", views.explain, name="explain"),
     path("login/", auth_views.LoginView.as_view(template_name="web/login.html", redirect_authenticated_user=True), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),

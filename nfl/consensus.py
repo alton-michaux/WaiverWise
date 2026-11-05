@@ -79,3 +79,8 @@ def game_final(kickoff: datetime | None) -> bool:
 
 def remaining_weeks(league: League) -> range:
     return range(league.current_week, league.final_week + 1)
+
+
+def playoff_weeks(league: League) -> range:
+    """The fantasy playoff weeks still to come."""
+    return range(max(league.current_week, league.reg_season_weeks + 1), league.final_week + 1)

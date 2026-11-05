@@ -8,6 +8,7 @@
         {% if r.helps_this_week %}<span class="tag tag-in">{{ r.next_week_gain|signed }} this week</span>{% endif %}
         {% if r.player.injury_status and r.player.injury_status != "ACTIVE" %}<span class="tag tag-warn">{{ r.player.injury_status|status_label }}</span>{% endif %}
         {% include "web/_waiver_tags.html" %}
+        {% if r.ros_schedule.grade == "Good" %}<span class="tag tag-in">Good schedule</span>{% elif r.ros_schedule.grade == "Tough" %}<span class="tag tag-out">Tough schedule</span>{% endif %}
       </span>
       <span class="muted row-meta">{{ r.player.position }} · {{ r.player.pro_team }} · {% if r.drop %}Drop {{ r.drop.name }}{% else %}Open roster spot{% endif %}</span>
     </span>
@@ -18,8 +19,11 @@
     <div><dt>Week gain</dt><dd>{{ r.next_week_gain|signed }}</dd></div>
     <div><dt>Rest of season</dt><dd>{{ r.ros_points|pts }}</dd></div>
     <div><dt>Over replacement</dt><dd>{{ r.vorp|signed }}</dd></div>
+    {% if r.ros_schedule %}<div><dt>Schedule</dt><dd>{{ r.ros_schedule.grade }}</dd></div>{% endif %}
+    {% if r.playoff_schedule %}<div><dt>Playoff schedule</dt><dd>{{ r.playoff_schedule.grade }}</dd></div>{% endif %}
     <div><dt>Rostered</dt><dd>{{ r.player.percent_owned|floatformat:0 }}%</dd></div>
     {% if r.trend %}<div><dt>Targets + carries/game</dt><dd>{{ r.trend.recent_opportunities|pts }} ({{ r.trend.opportunity_change|signed }})</dd></div>{% endif %}
     {% if r.trend.recent_snap_pct is not None %}<div><dt>Snap share</dt><dd>{{ r.trend.recent_snap_pct|pct }}{% if r.trend.snap_pct_change is not None %} ({{ r.trend.snap_pct_change|pct }}){% endif %}</dd></div>{% endif %}
   </dl>
+  <p class="waiver-more">{% include "web/_player_link.html" with pk=r.player.pk name="Player details" link_class="link-button" %}</p>
 </details>

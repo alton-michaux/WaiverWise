@@ -1,3 +1,5 @@
+import pytest
+
 from analysis.projections import Projection
 from analysis.trends import UsageWeek, trend
 from analysis.waivers import WeeklyPlayer, evaluate, streamers
@@ -77,3 +79,51 @@ def test_drop_is_chosen_per_free_agent():
     assert report.drop_id == 3  # overall most expendable
     assert report.targets[0].drop_id == 2  # but adding a K should replace the old K
     assert report.targets[0].ros_gain == 6
+
+
+SPECIALIST_SLOTS = {"QB": 1, "K": 1, "D/ST": 1, "BE": 1}
+
+
+def specialist_roster():
+    return [wp(1, "QB", 20, 20), wp(2, "K", 6, 6), wp(3, "D/ST", 7, 7), wp(4, "RB", 15, 15)]
+
+
+def test_specialist_only_swaps_for_its_own_position():
+    # the RB never starts in these slots, so he'd be the free drop if he were fair game
+    fas = [wp(10, "K", 9, 9), wp(11, "D/ST", 8, 8)]
+    report = evaluate(specialist_roster(), fas, SPECIALIST_SLOTS, WEEKS)
+    assert {t.id: t.drop_id for t in report.targets} == {10: 2, 11: 3}
+
+
+def test_specialist_worse_than_your_own_loses_points():
+    report = evaluate(specialist_roster(), [wp(10, "K", 5, 5)], SPECIALIST_SLOTS, WEEKS)
+    assert report.targets[0].ros_gain == -2
+
+
+def test_skill_player_never_drops_a_specialist():
+    # the kicker loses to the streamer, so he'd be free to drop if he were fair game
+    roster = specialist_roster()
+    fas = [wp(10, "QB", 21, 21), wp(11, "K", 9, 9), wp(12, "K", 8, 8), wp(13, "K", 7, 7)]
+    report = evaluate(roster, fas, SPECIALIST_SLOTS, WEEKS, baseline=streamers(fas, WEEKS))
+    assert next(t for t in report.targets if t.id == 10).drop_id == 4
+
+
+def test_specialist_falls_back_to_anyone_with_none_rostered():
+    roster = [wp(1, "QB", 20, 20), wp(2, "RB", 3, 3), wp(3, "D/ST", 7, 7), wp(4, "RB", 15, 15)]
+    report = evaluate(roster, [wp(10, "K", 9, 9)], SPECIALIST_SLOTS, WEEKS)
+    assert report.targets[0].drop_id == 2
+
+
+def test_report_wide_drop_follows_the_position_filter():
+    roster = specialist_roster()
+    assert evaluate(roster, [], SPECIALIST_SLOTS, WEEKS).drop_id == 4
+    assert evaluate(roster, [], SPECIALIST_SLOTS, WEEKS, position="QB").drop_id == 4
+    assert evaluate(roster, [], SPECIALIST_SLOTS, WEEKS, position="K").drop_id == 2
+    assert evaluate(roster, [], SPECIALIST_SLOTS, WEEKS, position="D/ST").drop_id == 3
+
+
+def test_trend_averages_recent_shares_and_skips_missing():
+    weeks = [UsageWeek(1, None, 3, 0, 0.9, 0.9)] + [UsageWeek(w, None, 3, 0, 0.2, None) for w in range(2, 5)]
+    t = trend(weeks)
+    assert t.recent_target_share == pytest.approx(0.2)
+    assert t.recent_air_yards_share is None

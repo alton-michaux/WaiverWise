@@ -14,6 +14,9 @@
 </article>
 <script>
   // signed out: have the service worker forget cached league pages on this device
-  navigator.serviceWorker?.ready.then((reg) => reg.active?.postMessage("clear-pages"));
+  navigator.serviceWorker?.ready.then((reg) => {
+    reg.active?.postMessage("clear-pages");
+    reg.pushManager?.getSubscription().then((sub) => sub?.unsubscribe());  // the next send finds it gone and forgets it
+  });
 </script>
 {% endblock %}

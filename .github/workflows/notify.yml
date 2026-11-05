@@ -1,0 +1,31 @@
+# Sends what quiet hours held back, mostly waiver results from the nightly sync. Syncs send everything else.
+name: Send notifications
+
+on:
+  schedule:
+    - cron: "0 13 * * *"  # 8:00 ET (9:00 during daylight time)
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+
+      # logs here are public, so this prints a count and nothing else
+      - name: Send
+        run: uv run python manage.py send_notifications

@@ -15,9 +15,10 @@
     {% for r in rows %}
       <tr>
         <td>
-          {{ r.player.name }} <span class="muted">{{ r.player.position }} · {{ r.player.pro_team }}</span>
+          {% include "web/_player_link.html" with pk=r.player.pk name=r.player.name %} <span class="muted">{{ r.player.position }} · {{ r.player.pro_team }}</span>
           {% if r.player.injury_status and r.player.injury_status != "ACTIVE" %}<span class="tag tag-warn">{{ r.player.injury_status|status_label }}</span>{% endif %}
           {% include "web/_waiver_tags.html" %}
+          {% if r.ros_schedule.grade == "Good" %}<span class="tag tag-in">Good schedule</span>{% elif r.ros_schedule.grade == "Tough" %}<span class="tag tag-out">Tough schedule</span>{% endif %}
         </td>
         <td class="num">{{ r.player.percent_owned|floatformat:0 }}</td>
         <td class="num">{% if r.week_proj %}{{ r.week_proj.mean|pts }}{% else %}<span class="muted">bye</span>{% endif %}</td>

@@ -1,12 +1,15 @@
 from datetime import timedelta
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from analysis.matchups import Rating
 from analysis.projections import Projection
 from league.models import League, Matchup, Player, ProGame, RosterEntry, Team
+from nfl.models import GameLine
 from web import narrate, services
 from web.templatetags.waiverwise import slot_label, status_label
 
@@ -220,3 +223,82 @@ def test_status_label(status, expected):
 def test_slot_label():
     assert slot_label("RB/WR/TE") == "FLEX"
     assert slot_label("QB") == "QB"
+
+
+GOOD = Rating(3.0, 2, "Good")
+TOUGH = Rating(-3.0, 31, "Tough")
+AVERAGE = Rating(0.1, 15, "Neutral")
+
+
+@pytest.fixture
+def rated(monkeypatch):
+    """(defense, position) -> Rating."""
+    table = {}
+    monkeypatch.setattr(services, "defense_ratings", lambda league: table)
+    return table
+
+
+@pytest.fixture
+def game_against_mia():
+    ProGame.objects.create(season=2026, week=8, team="NYJ", opponent="MIA", kickoff=timezone.now() + timedelta(days=1))
+
+
+def test_good_and_tough_matchups_get_a_chip(signed_in, lineup_with_a_move, game_against_mia, rated):
+    rated[("MIA", "WR")] = GOOD
+    assert "Good matchup" in signed_in.get("/startsit/").content.decode()
+    rated[("MIA", "WR")] = TOUGH
+    assert "Tough matchup" in signed_in.get("/startsit/").content.decode()
+
+
+def test_neutral_matchup_has_no_chip(signed_in, lineup_with_a_move, game_against_mia, rated):
+    rated[("MIA", "WR")] = AVERAGE
+    assert " matchup</span>" not in signed_in.get("/startsit/").content.decode()
+
+
+def test_started_game_has_no_chip(signed_in, lineup_with_a_move, rated):
+    ProGame.objects.create(season=2026, week=8, team="NYJ", opponent="MIA", kickoff=timezone.now() - timedelta(hours=1))
+    rated[("MIA", "WR")] = GOOD
+    assert "Good matchup" not in signed_in.get("/startsit/").content.decode()
+
+
+def test_away_game_reads_at_and_home_or_unknown_reads_vs(signed_in, lineup_with_a_move, game_against_mia):
+    assert "NYJ vs MIA" in signed_in.get("/startsit/").content.decode()
+    line = GameLine.objects.create(season=2026, week=8, team="NYJ", is_home=False)
+    assert "NYJ @ MIA" in signed_in.get("/startsit/").content.decode()
+    line.is_home = True
+    line.save()
+    assert "NYJ vs MIA" in signed_in.get("/startsit/").content.decode()
+
+
+def test_matchups_never_change_the_recommendation(mine, rival, lineup_with_a_move, game_against_mia, projections, rated):
+    add_player(rival, "WR", 3, "Their Guy", "BUF")
+    projections["Their Guy"] = 10.0
+    Matchup.objects.create(league=mine.league, week=8, team_a=mine, team_b=rival)
+    np.random.seed(0)
+    before = services.start_sit(mine)["rec"]
+
+    rated[("MIA", "WR")] = TOUGH
+    GameLine.objects.create(season=2026, week=8, team="NYJ", is_home=False, spread=10.0, total=30.0, implied_total=10.0)
+    np.random.seed(0)
+    after = services.start_sit(mine)["rec"]
+
+    assert (after.best, after.moves, after.best_points, after.current_points) == (
+        before.best, before.moves, before.best_points, before.current_points
+    )
+    assert after.best_win_prob == pytest.approx(before.best_win_prob, abs=0.03)
+
+
+def test_explanation_gets_the_game_context(mine, lineup_with_a_move, game_against_mia, rated):
+    rated[("MIA", "WR")] = TOUGH
+    GameLine.objects.create(season=2026, week=8, team="NYJ", spread=3.0, total=44.0, implied_total=20.5)
+    roster = narrate.startsit_payload(services.start_sit(mine))["roster"]
+    wilson = next(r for r in roster if r["name"] == "Garrett Wilson")
+    assert (wilson["matchup"], wilson["team_implied_total"], wilson["team_spread"]) == ("Tough", 20.5, 3.0)
+
+
+def test_explanation_leaves_out_unremarkable_context(mine, lineup_with_a_move, game_against_mia, rated):
+    rated[("MIA", "WR")] = AVERAGE
+    GameLine.objects.create(season=2026, week=8, team="NYJ")  # lines not posted yet
+    roster = narrate.startsit_payload(services.start_sit(mine))["roster"]
+    wilson = next(r for r in roster if r["name"] == "Garrett Wilson")
+    assert not {"matchup", "team_implied_total", "team_spread"} & wilson.keys()
